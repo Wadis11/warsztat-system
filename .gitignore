@@ -1,0 +1,17 @@
+# Dane klientów i dokumenty źródłowe nigdy nie trafiają do repozytorium
+*.pdf
+*.xml
+fixtures/
+dane/
+
+# Sekrety
+.env
+.env.*
+*.key
+*.pem
+
+# Narzędzia
+node_modules/
+__pycache__/
+.DS_Store
+supabase/.temp/

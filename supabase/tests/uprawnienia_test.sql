@@ -1,0 +1,80 @@
+-- Test uprawnień: pracownik nie widzi danych finansowych, właściciel widzi wszystko.
+-- Uruchamiany przez tools/test_bazy.sh na lokalnym Postgresie z atrapą schematu auth Supabase.
+\set ON_ERROR_STOP on
+
+-- Dane testowe (jako superużytkownik, z pominięciem RLS)
+insert into auth.users (id) values
+  ('00000000-0000-0000-0000-00000000000a'),
+  ('00000000-0000-0000-0000-00000000000b'),
+  ('00000000-0000-0000-0000-00000000000c');
+insert into profile (id, imie, rola) values
+  ('00000000-0000-0000-0000-00000000000a', 'Właściciel', 'wlasciciel'),
+  ('00000000-0000-0000-0000-00000000000b', 'Pracownik', 'pracownik');
+-- użytkownik ...c nie ma profilu (np. ktoś, kto założył konto z pominięciem procedury)
+
+insert into klienci (id, nazwa, nip, segment) values
+  ('10000000-0000-0000-0000-000000000001', 'Ayvens Poland', '0000000000', 'ayvens');
+insert into klienci_stawki (klient_id, stawka_blach, stawka_lak) values
+  ('10000000-0000-0000-0000-000000000001', 180, 180);
+insert into zlecenia (id, nr_rej, marka, klient_id, data_przyjecia) values
+  ('20000000-0000-0000-0000-000000000001', 'WE 5V073', 'FORD', '10000000-0000-0000-0000-000000000001', '2026-11-21');
+insert into kosztorysy (zlecenie_id, wersja, zrodlo, netto) values
+  ('20000000-0000-0000-0000-000000000001', 'zlozony', 'audatex', 38350.74);
+
+create function pg_temp.jako(uid text) returns void language sql as $$
+  select set_config('request.jwt.claim.sub', uid, false);
+$$;
+
+create function pg_temp.sprawdz(warunek boolean, opis text) returns void language plpgsql as $$
+begin
+  if not warunek then raise exception 'NIE PRZESZŁO: %', opis; end if;
+  raise notice 'ok: %', opis;
+end $$;
+
+-- Numer zlecenia nadany automatycznie
+select pg_temp.sprawdz((select numer from zlecenia limit 1) = '26-0001', 'numer zlecenia 26-0001');
+
+set role authenticated;
+
+-- ---- Pracownik ----
+select pg_temp.jako('00000000-0000-0000-0000-00000000000b');
+select pg_temp.sprawdz((select count(*) from zlecenia) = 1, 'pracownik widzi zlecenia');
+select pg_temp.sprawdz((select count(*) from klienci) = 1, 'pracownik widzi klientów');
+select pg_temp.sprawdz((select count(*) from klienci_stawki) = 0, 'pracownik NIE widzi stawek');
+select pg_temp.sprawdz((select count(*) from kosztorysy) = 0, 'pracownik NIE widzi kosztorysów');
+select pg_temp.sprawdz((select count(*) from rejestr_zmian) = 0, 'pracownik NIE widzi rejestru zmian');
+
+insert into zlecenia (nr_rej, marka, data_przyjecia) values ('KR 12345', 'OPEL', '2026-11-21');
+select pg_temp.sprawdz((select count(*) from zlecenia) = 2, 'pracownik dodaje zlecenie prywatne');
+select pg_temp.sprawdz((select numer from zlecenia where nr_rej = 'KR 12345') = '26-0002', 'kolejny numer 26-0002');
+
+update profile set rola = 'wlasciciel' where id = '00000000-0000-0000-0000-00000000000b';
+reset role;
+select pg_temp.sprawdz((select rola from profile where id = '00000000-0000-0000-0000-00000000000b') = 'pracownik',
+                       'pracownik NIE nadaje sobie roli właściciela');
+set role authenticated;
+
+do $$ begin
+  insert into kosztorysy (zlecenie_id, wersja, zrodlo, netto)
+  values ('20000000-0000-0000-0000-000000000001', 'zlozony', 'reczny', 1);
+  raise exception 'NIE PRZESZŁO: pracownik zapisał kosztorys';
+exception when insufficient_privilege then raise notice 'ok: pracownik NIE zapisuje kosztorysów';
+end $$;
+
+delete from zlecenia where nr_rej = 'KR 12345';
+select pg_temp.sprawdz((select count(*) from zlecenia) = 2, 'pracownik NIE usuwa zleceń');
+
+-- ---- Konto bez profilu ----
+select pg_temp.jako('00000000-0000-0000-0000-00000000000c');
+select pg_temp.sprawdz((select count(*) from zlecenia) = 0, 'konto bez profilu NIE widzi zleceń');
+
+-- ---- Właściciel ----
+select pg_temp.jako('00000000-0000-0000-0000-00000000000a');
+select pg_temp.sprawdz((select count(*) from klienci_stawki) = 1, 'właściciel widzi stawki');
+select pg_temp.sprawdz((select count(*) from kosztorysy) = 1, 'właściciel widzi kosztorysy');
+select pg_temp.sprawdz((select count(*) from rejestr_zmian where tabela = 'zlecenia') >= 2, 'rejestr zapisuje zmiany');
+select pg_temp.sprawdz((select kto from rejestr_zmian where tabela = 'zlecenia' and po ->> 'nr_rej' = 'KR 12345' limit 1)
+                       = '00000000-0000-0000-0000-00000000000b', 'rejestr wie, kto dodał zlecenie');
+select pg_temp.sprawdz(norm_indeks('6508-05-8186249P') = '6508058186249P', 'normalizacja indeksu części');
+
+reset role;
