@@ -2,13 +2,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { Kontekst } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
+import { plikPli, type Przelew, walidacja, type Zleceniodawca } from "../przelewy/pli.ts";
 
 interface Platnosc {
   id: string; numer: string; nip_kontrahenta: string | null; nazwa_kontrahenta: string | null; data_wystawienia: string;
   rodzaj: string | null; vat: number; brutto: number; do_zaplaty: number | null; waluta: string; termin_platnosci: string | null;
   forma_platnosci: number | null; rachunek: string | null; bank: string | null; rachunek_wirtualny: boolean; mpp: boolean;
   oplacono: string | null; bl_wynik: string | null; bl_sprawdzono: string | null; bl_id: string | null;
-  status: string; dni_do_terminu: number | null;
+  status: string; dni_do_terminu: number | null; adres_kontrahenta: string | null;
 }
 
 const dzisIso = () => new Date().toLocaleDateString("sv-SE"); // RRRR-MM-DD w czasie lokalnym
@@ -79,17 +80,21 @@ export function Platnosci(_: Kontekst) {
   const [zaznaczone, ustawZaznaczone] = useState<Set<string>>(new Set());
   const [miesiac, ustawMiesiac] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [granica, ustawGranice] = useState<string>("");
+  const [firma, ustawFirme] = useState<Zleceniodawca>({ rachunek: "", nazwa: "", adres: "" });
+  const [paczka, ustawPaczke] = useState<{ data: string; wyslane: string[] | null; pominiete: string[] } | null>(null);
   const [blad, ustawBlad] = useState<string | null>(null);
 
   const wczytaj = useCallback(async () => {
     const statusy = pokazZaplacone ? ["do_zaplaty", "zaplacona"] : ["do_zaplaty"];
     const [p, u] = await Promise.all([
       db.from("platnosci").select("*").in("status", statusy).order("termin_platnosci", { ascending: true, nullsFirst: true }).limit(1000),
-      db.from("ustawienia").select("platnosci_od").eq("id", 1).single(),
+      db.from("ustawienia").select("platnosci_od, firma_nazwa, firma_adres, firma_rachunek").eq("id", 1).single(),
     ]);
     if (p.error) { ustawBlad(p.error.message); return; }
     ustawListe(p.data as Platnosc[]);
-    ustawGranice((u.data as { platnosci_od: string } | null)?.platnosci_od ?? "");
+    const us = u.data as { platnosci_od: string; firma_nazwa: string; firma_adres: string; firma_rachunek: string | null } | null;
+    ustawGranice(us?.platnosci_od ?? "");
+    if (us) ustawFirme({ rachunek: us.firma_rachunek ?? "", nazwa: us.firma_nazwa, adres: us.firma_adres });
   }, [pokazZaplacone]);
   useEffect(() => { wczytaj(); }, [wczytaj]);
 
@@ -99,6 +104,35 @@ export function Platnosci(_: Kontekst) {
     ustawBlad(error ? error.message : null);
     ustawZaznaczone(new Set());
     await wczytaj();
+  }
+
+  async function zapiszFirme() {
+    const rachunek = firma.rachunek.replace(/\D/g, "");
+    const { error } = await db.from("ustawienia").update({ firma_rachunek: rachunek || null, firma_nazwa: firma.nazwa, firma_adres: firma.adres }).eq("id", 1);
+    ustawBlad(error ? `Nie zapisano danych firmy: ${error.message}` : null);
+    await wczytaj();
+  }
+
+  function pobierzPaczke() {
+    if (!paczka) return;
+    if (!/^\d{26}$/.test(firma.rachunek)) { ustawBlad("Wpisz rachunek firmy (26 cyfr) w ustawieniach na dole strony."); return; }
+    const pominiete: string[] = [];
+    const dobre: { id: string; p: Przelew }[] = [];
+    for (const f of zaznaczoneLista) {
+      const p: Przelew = {
+        rachunekOdbiorcy: f.rachunek ?? "", nazwaOdbiorcy: f.nazwa_kontrahenta ?? "", adresOdbiorcy: f.adres_kontrahenta,
+        kwota: f.do_zaplaty ?? f.brutto, numerFaktury: f.numer, mpp: f.mpp, kwotaVat: f.vat, nipOdbiorcy: f.nip_kontrahenta,
+      };
+      const problem = f.waluta !== "PLN" ? `waluta ${f.waluta}` : f.bl_wynik === "NIE" ? "rachunku nie ma na białej liście" : walidacja(p);
+      if (problem) pominiete.push(`${f.nazwa_kontrahenta} ${f.numer}: ${problem}`); else dobre.push({ id: f.id, p });
+    }
+    if (!dobre.length) { ustawPaczke({ ...paczka, pominiete }); return; }
+    const bajty = plikPli(dobre.map((x) => x.p), firma, paczka.data.replace(/-/g, ""));
+    const url = URL.createObjectURL(new Blob([bajty as BlobPart], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `przelewy_${paczka.data}.pli`; a.click();
+    URL.revokeObjectURL(url);
+    ustawPaczke({ ...paczka, wyslane: dobre.map((x) => x.id), pominiete });
   }
 
   async function zmienGranice(d: string) {
@@ -197,9 +231,29 @@ export function Platnosci(_: Kontekst) {
             </div>
             {zaznaczoneLista.length > 0 && <div className="przyciski" style={{ alignItems: "center" }}>
               <span className="cichy">Zaznaczono {zaznaczoneLista.length} · {zl(suma(zaznaczoneLista))}</span>
+              <button className="przycisk drugi" onClick={() => ustawPaczke({ data: dzisIso(), wyslane: null, pominiete: [] })}>Paczka przelewów do BNP</button>
               <button className="przycisk" onClick={() => oznacz([...zaznaczone], true)}>Oznacz jako zapłacone</button>
             </div>}
           </div>
+          {paczka && (
+            <div className="srodek" style={{ display: "flex", flexDirection: "column", gap: 10, borderBottom: "1px solid var(--linia)" }}>
+              {paczka.wyslane === null ? <>
+                <div className="przyciski" style={{ alignItems: "flex-end" }}>
+                  <label>Data realizacji<input type="date" min={dzisIso()} value={paczka.data} onChange={(e) => ustawPaczke({ ...paczka, data: e.target.value })} /></label>
+                  <button className="przycisk" onClick={pobierzPaczke}>Pobierz plik ({zaznaczoneLista.length})</button>
+                  <button className="przycisk drugi" onClick={() => ustawPaczke(null)}>Anuluj</button>
+                </div>
+                <p className="cichy" style={{ margin: 0 }}>Z rachunku {nrb(firma.rachunek || null)}. W GOonline Biznes: Płatności → Import z pliku → szablon „MultiCash PLI”. Przelewy z MPP pójdą jako split payment. Paczkę zatwierdzasz w banku jak zwykle.</p>
+              </> : <>
+                <div className="info">Pobrano plik z {paczka.wyslane.length} przelewami. Gdy zatwierdzisz je w banku, oznacz je tutaj jako zapłacone.</div>
+                <div className="przyciski">
+                  <button className="przycisk" onClick={() => { oznacz(paczka.wyslane!, true); ustawPaczke(null); }}>Oznacz {paczka.wyslane.length} jako zapłacone</button>
+                  <button className="przycisk drugi" onClick={() => ustawPaczke(null)}>Później</button>
+                </div>
+              </>}
+              {paczka.pominiete.length > 0 && <div className="uwaga">Pominięte w pliku:<br />{paczka.pominiete.map((x) => <div key={x}>• {x}</div>)}</div>}
+            </div>
+          )}
           {lista && widoczne.length === 0 ? <div className="pusto">{lista.length === 0 ? "Nic do zapłaty." : "Brak faktur dla tego filtra."}</div> : (
             <div className="przewijanie"><table style={{ minWidth: 900 }}>
               <thead><tr><th></th><th>Termin</th><th>Dostawca</th><th>Faktura</th><th className="liczba">Do zapłaty</th><th>Rachunek</th><th></th></tr></thead>
@@ -237,6 +291,12 @@ export function Platnosci(_: Kontekst) {
 
       <details className="karta"><summary className="srodek" style={{ cursor: "pointer" }}>Ustawienia i wyjaśnienia</summary>
         <div className="srodek" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="siatka">
+            <label>Rachunek firmy (zleceniodawca)<input value={firma.rachunek} onChange={(e) => ustawFirme({ ...firma, rachunek: e.target.value })} placeholder="26 cyfr" /></label>
+            <label>Nazwa firmy<input value={firma.nazwa} onChange={(e) => ustawFirme({ ...firma, nazwa: e.target.value })} /></label>
+            <label>Adres (linie oddziel znakiem |)<input value={firma.adres} onChange={(e) => ustawFirme({ ...firma, adres: e.target.value })} /></label>
+          </div>
+          <div className="przyciski"><button className="przycisk drugi" onClick={zapiszFirme}>Zapisz dane firmy</button></div>
           <label style={{ maxWidth: 320 }}>Faktury z terminem przed tą datą uznaję za rozliczone (archiwum)
             <input type="date" value={granica} onChange={(e) => e.target.value && zmienGranice(e.target.value)} /></label>
           <p className="cichy">Gotówka i karta (forma płatności z faktury) oraz faktury oznaczone przez dostawcę jako zapłacone nie trafiają na listę.

@@ -99,3 +99,10 @@ select pg_temp.sprawdz((select termin_platnosci is null and do_zaplaty = 50 from
                        'uszkodzony XML nie blokuje zapisu faktury');
 update faktury set oplacono = '2026-11-21' where nr_ksef = 'P-PRZELEW';
 select pg_temp.sprawdz((select status from platnosci where nr_ksef = 'P-PRZELEW') = 'zaplacona', 'oznaczenie zapłaty');
+
+-- Adres dostawcy do przelewu
+select pg_temp.faktura('P-ADRES', '<Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/"><Podmiot1><Adres><KodKraju>PL</KodKraju>
+<AdresL1>UL. DŁUGA  5</AdresL1><AdresL2>30-001 Kraków</AdresL2></Adres></Podmiot1><Podmiot2><Adres><AdresL1>INNY</AdresL1></Adres></Podmiot2>
+<Fa><Platnosc><TerminPlatnosci><Termin>2026-12-01</Termin></TerminPlatnosci></Platnosc></Fa></Faktura>', 100);
+select pg_temp.sprawdz((select adres_kontrahenta from platnosci where nr_ksef = 'P-ADRES') = 'UL. DŁUGA 5|30-001 Kraków',
+                       'adres sprzedawcy z faktury zakupu');
