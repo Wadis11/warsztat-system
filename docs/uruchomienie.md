@@ -69,3 +69,15 @@ select kierunek, count(*), sum(netto) from faktury group by kierunek;
 
 `ostatni_raport.dokonczone = false` w czasie pobierania zaległości jest normalne.
 Błąd uwierzytelnienia (np. kod 450) oznacza zły albo unieważniony token: wygeneruj nowy i podmień sekret.
+
+## 7. Aplikacja (Netlify)
+
+1. Netlify → Add new site → Import an existing project → GitHub → `Wadis11/warsztat-system`.
+   Ustawienia budowania czyta z `netlify.toml` (katalog `app`, Node 22) — nic nie zmieniać.
+2. Supabase → Authentication → Sign In / Providers → Email: wyłączyć „Allow new users to sign up”.
+   Konta zakłada tylko właściciel (Authentication → Users → Add user, z zaznaczonym auto-potwierdzeniem).
+3. Każde nowe konto dostaje rolę w tabeli `profile` (`wlasciciel` albo `pracownik`).
+   Konto bez profilu nie widzi niczego.
+4. Właściciel przy pierwszym logowaniu skanuje kod QR w aplikacji uwierzytelniającej
+   (Google Authenticator, Microsoft Authenticator, 1Password). Bez drugiego składnika baza
+   nie wydaje danych finansowych nawet z poprawnym hasłem.

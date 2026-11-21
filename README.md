@@ -18,6 +18,10 @@ Specyfikacja: dokument „System zarządzania warsztatem — Moduł 1: Rentowno�
 | `supabase/tests/` | Testy SQL: uprawnienia, zapis faktur z KSeF |
 | `supabase/functions/_shared/ksef/` | Klient KSeF 2.0, odczyt FA(3), dopasowanie pozycji do zleceń, synchronizacja |
 | `supabase/functions/ksef-sync/` | Funkcja uruchamiana co godzinę: pobiera nowe faktury z KSeF |
+| `app/` | Aplikacja webowa (React + Vite): logowanie z 2FA, kolejka faktur, zlecenia, wgrywanie kosztorysów, karta pracy |
+| `app/src/kosztorys/` | Parser kosztorysów w TypeScript (działa w przeglądarce, PDF nie opuszcza bazy firmy) |
+| `netlify.toml` | Konfiguracja hostingu aplikacji |
+| `tools/porownaj_parser.ts` | Porównanie parsera TS z prototypem na lokalnych PDF-ach |
 | `tools/parser/` | Prototyp parsera kosztorysów (Audatex, ControlExpert, skany z poprawkami) |
 | `tools/test_bazy.sh` | Uruchamia migracje i testy SQL na tymczasowym Postgresie |
 | `docs/uruchomienie.md` | Instrukcja pierwszego uruchomienia (Supabase, sekrety, harmonogram) |
@@ -28,6 +32,7 @@ Specyfikacja: dokument „System zarządzania warsztatem — Moduł 1: Rentowno�
 npm test               # moduł KSeF (Node 22+)
 npm run typy           # sprawdzenie typów
 ./tools/test_bazy.sh   # baza: wymaga Postgres 16; nie uruchamiać jako root
+cd app && npm run build  # aplikacja: typy i paczka produkcyjna
 ```
 
 Faktury testowe w `supabase/functions/_shared/ksef/testy/` są fikcyjne i przechodzą walidację

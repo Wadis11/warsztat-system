@@ -21,8 +21,9 @@ insert into zlecenia (id, nr_rej, marka, klient_id, data_przyjecia) values
 insert into kosztorysy (zlecenie_id, wersja, zrodlo, netto) values
   ('20000000-0000-0000-0000-000000000001', 'zlozony', 'audatex', 38350.74);
 
-create function pg_temp.jako(uid text) returns void language sql as $$
+create function pg_temp.jako(uid text, aal text default 'aal2') returns void language sql as $$
   select set_config('request.jwt.claim.sub', uid, false);
+  select set_config('request.jwt.claims', json_build_object('aal', aal)::text, false);
 $$;
 
 create function pg_temp.sprawdz(warunek boolean, opis text) returns void language plpgsql as $$
@@ -41,6 +42,7 @@ select pg_temp.jako('00000000-0000-0000-0000-00000000000b');
 select pg_temp.sprawdz((select count(*) from zlecenia) = 1, 'pracownik widzi zlecenia');
 select pg_temp.sprawdz((select count(*) from klienci) = 1, 'pracownik widzi klientów');
 select pg_temp.sprawdz((select count(*) from klienci_stawki) = 0, 'pracownik NIE widzi stawek');
+select pg_temp.sprawdz((select przychod_kosztorys from zlecenia_wyniki limit 1) is null, 'pracownik NIE widzi kwot w wynikach zleceń');
 select pg_temp.sprawdz((select count(*) from kosztorysy) = 0, 'pracownik NIE widzi kosztorysów');
 select pg_temp.sprawdz((select count(*) from rejestr_zmian) = 0, 'pracownik NIE widzi rejestru zmian');
 
@@ -68,8 +70,16 @@ select pg_temp.sprawdz((select count(*) from zlecenia) = 2, 'pracownik NIE usuwa
 select pg_temp.jako('00000000-0000-0000-0000-00000000000c');
 select pg_temp.sprawdz((select count(*) from zlecenia) = 0, 'konto bez profilu NIE widzi zleceń');
 
+-- ---- Właściciel bez kodu z telefonu (samo hasło) ----
+select pg_temp.jako('00000000-0000-0000-0000-00000000000a', 'aal1');
+select pg_temp.sprawdz((select count(*) from klienci_stawki) = 0, 'właściciel bez kodu 2FA NIE widzi stawek');
+select pg_temp.sprawdz((select count(*) from zlecenia) = 2, 'właściciel bez kodu 2FA widzi zlecenia jak pracownik');
+
 -- ---- Właściciel ----
 select pg_temp.jako('00000000-0000-0000-0000-00000000000a');
+select pg_temp.sprawdz(moja_rola() = 'wlasciciel', 'rola właściciela odczytana');
+select pg_temp.sprawdz((select przychod_kosztorys from zlecenia_wyniki where nr_rej = 'WE 5V073') = 38350.74,
+                       'wynik zlecenia: przychód z kosztorysu');
 select pg_temp.sprawdz((select count(*) from klienci_stawki) = 1, 'właściciel widzi stawki');
 select pg_temp.sprawdz((select count(*) from kosztorysy) = 1, 'właściciel widzi kosztorysy');
 select pg_temp.sprawdz((select count(*) from rejestr_zmian where tabela = 'zlecenia') >= 2, 'rejestr zapisuje zmiany');
