@@ -43,7 +43,8 @@ function zFormatu(k: Kosztorys): { f: Formularz; wersja: Wersja; segment: string
       wersja: k.autor === "UNIQA" ? "wycena_ubezpieczyciela" : k.autor === "Ayvens" ? "zaakceptowany" : "zlozony",
       segment: ayvens ? "ayvens" : "ubezpieczyciel",
       f: {
-        ...pusty, nr_rej: k.nrRej ?? "", vin: k.vin ?? "", marka: k.marka ?? "", model: k.model ?? "", nr_szkody: k.nrSzkody ?? "",
+        ...pusty, nr_rej: k.nrRej ?? "", vin: k.vin ?? "", marka: k.marka ?? "", model: k.model ?? "", // Ayvens nadaje numer szkody równy numerowi kalkulacji (np. 2611130003)
+        nr_szkody: k.nrSzkody ?? (ayvens ? k.sygnatura ?? k.nrKalkulacji ?? "" : ""),
         nr_kalkulacji: k.nrKalkulacji ?? "", data: naIso(k.data), autor: k.autor ?? "",
         stawka_blach: t(k.stawkaBlach), stawka_lak: t(k.stawkaLak), rbh_blach: t(k.rbhBlach), rbh_lak: t(k.rbhLak),
         robocizna_blach: t(k.robociznaBlach), robocizna_lak: t(k.robociznaLak), material_lak: t(k.materialLak),
@@ -111,6 +112,7 @@ export function WgrajKosztorys({ przejdz }: Kontekst) {
     const netto = num(f.netto);
     if (netto === null || Number.isNaN(netto)) { ustawBlad("Wpisz kwotę netto kosztorysu."); return; }
     if (!f.nr_rej.trim() && !f.vin.trim()) { ustawBlad("Potrzebna rejestracja albo VIN, żeby faktury trafiały do tego auta."); return; }
+    if (!klient) { ustawBlad("Wybierz klienta (płatnika) — bez niego zlecenie nie trafi do rentowności klienta."); return; }
     ustawBlad(null);
     try {
       ustawTrwa("Zapisuję zlecenie…");
@@ -129,7 +131,7 @@ export function WgrajKosztorys({ przejdz }: Kontekst) {
         const z = zlecenia.find((x) => x.id === doZlecenia)!;
         const uzup: Record<string, string> = {};
         if (!z.vin && f.vin.trim()) uzup.vin = f.vin.trim().toUpperCase();
-        if (!z.klient_id && klient) uzup.klient_id = klient;
+        if (klient && z.klient_id !== klient) uzup.klient_id = klient;
         if (f.nr_szkody.trim()) uzup.nr_szkody = f.nr_szkody.trim();
         if (Object.keys(uzup).length) await db.from("zlecenia").update(uzup).eq("id", zlecenieId);
       }

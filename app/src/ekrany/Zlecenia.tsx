@@ -2,11 +2,11 @@
 import { useEffect, useState } from "react";
 import type { Kontekst } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
-import { SEGMENTY } from "./WyborKlienta.tsx";
+import { type Klient, SEGMENTY } from "./WyborKlienta.tsx";
 
 interface Wiersz {
   id: string; numer: string; nr_rej: string | null; marka: string | null; model: string | null; status: string;
-  data_przyjecia: string; klient?: string | null; segment?: string | null; wersja_kosztorysu?: string | null;
+  data_przyjecia: string; klient_id?: string | null; klient?: string | null; segment?: string | null; wersja_kosztorysu?: string | null;
   przychod_kosztorys?: number | null; przychod_faktura?: number | null; rbh?: number | null;
   koszt_czesci?: number | null; koszt_lakier_materialy?: number | null; pozycji_kosztowych?: number | null;
 }
@@ -15,6 +15,7 @@ const STATUSY: Record<string, string> = { przyjete: "Przyjęte", w_naprawie: "W 
 export function Zlecenia({ rola, przejdz }: Kontekst) {
   const [wiersze, ustawWiersze] = useState<Wiersz[] | null>(null);
   const [szukaj, ustawSzukaj] = useState("");
+  const [klienci, ustawKlientow] = useState<Klient[]>([]);
   const wlasciciel = rola === "wlasciciel";
 
   async function wczytaj() {
@@ -22,6 +23,15 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
       ? await db.from("zlecenia_wyniki").select("*").order("data_przyjecia", { ascending: false }).limit(300)
       : await db.from("zlecenia").select("id, numer, nr_rej, marka, model, status, data_przyjecia").order("data_przyjecia", { ascending: false }).limit(300);
     ustawWiersze((data ?? []) as Wiersz[]);
+    if (wlasciciel) {
+      const k = await db.from("klienci").select("id, nazwa, segment").order("nazwa");
+      ustawKlientow((k.data ?? []) as Klient[]);
+    }
+  }
+
+  async function zmienKlienta(id: string, klientId: string) {
+    await db.from("zlecenia").update({ klient_id: klientId || null }).eq("id", id);
+    await wczytaj();
   }
   useEffect(() => { wczytaj(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -60,7 +70,10 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
                     {Object.entries(STATUSY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select></td>
                   {wlasciciel && <>
-                    <td>{w.klient ?? <span className="cichy">—</span>}{w.segment && <div className="cichy">{SEGMENTY[w.segment]}</div>}</td>
+                    <td><select aria-label={`Klient ${w.numer}`} value={w.klient_id ?? ""} onChange={(e) => zmienKlienta(w.id, e.target.value)}>
+                      <option value="">— brak —</option>
+                      {klienci.map((k) => <option key={k.id} value={k.id}>{k.nazwa}</option>)}
+                    </select>{w.segment && <div className="cichy">{SEGMENTY[w.segment]}</div>}</td>
                     <td className="liczba">{zl(przychod)}<div className="cichy">{w.przychod_faktura !== null && w.przychod_faktura !== undefined ? "z faktury" : w.wersja_kosztorysu ? `kosztorys: ${w.wersja_kosztorysu}` : ""}</div></td>
                     <td className="liczba">{zl(w.koszt_czesci)}</td>
                     <td className="liczba">{zl(w.koszt_lakier_materialy)}</td>
