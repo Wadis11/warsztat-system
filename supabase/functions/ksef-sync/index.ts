@@ -36,6 +36,9 @@ Deno.serve(async (req) => {
       start: env("KSEF_START", "2026-02-01T00:00:00Z"),
       terminMs: Date.parse(start) + 100_000,
       najpierwDni: 60, // bieżące płatności i zlecenia przed zaległościami od lutego
+      // Limity KSeF: 16 pobrań/min i 64/h. Uruchomienie co 20 min × 20 pobrań co 4,1 s = 60/h.
+      maksPobran: 20,
+      odstepMs: 4_100,
     });
     await db.from("synchronizacja_ksef").upsert({
       id: 1, ostatni_raport: raport, ostatni_blad: raport.bledy.length ? raport.bledy.join("\n") : null,

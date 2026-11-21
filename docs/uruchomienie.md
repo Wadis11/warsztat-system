@@ -37,7 +37,7 @@ supabase functions deploy ksef-sync --no-verify-jwt
 
 `--no-verify-jwt`, bo funkcja ma własne zabezpieczenie (`SYNC_SEKRET`) i nie jest wywoływana z przeglądarki.
 
-## 5. Harmonogram: co godzinę (na produkcji ustawiony 21.11, o :07)
+## 5. Harmonogram: co 20 minut (o :07, :27, :47)
 
 Co godzinę, bo limit KSeF to 64 pobrane faktury na godzinę. Pierwsze pobranie zaległych faktur od lutego
 (ok. 2–3 tys.) zajmie więc ok. 2 dni, a potem każde uruchomienie pobiera tylko nowe faktury.
@@ -47,7 +47,7 @@ W SQL Editor (z rozszerzeniami `pg_cron` i `pg_net` włączonymi w Database → 
 ```sql
 select vault.create_secret('<TEN_SAM_SYNC_SEKRET>', 'sync_sekret');
 
-select cron.schedule('ksef-sync', '7 * * * *', $$
+select cron.schedule('ksef-sync', '7,27,47 * * * *', $$
   select net.http_post(
     url := 'https://<ID_PROJEKTU>.supabase.co/functions/v1/ksef-sync',
     headers := jsonb_build_object(

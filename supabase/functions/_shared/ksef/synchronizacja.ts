@@ -44,12 +44,15 @@ export async function synchronizuj(
     start: string; maksPobran?: number; teraz?: Date; terminMs?: number;
     /** Najpierw ostatnie N dni (bieżące płatności i zlecenia), dopiero potem zaległości od punktu kontynuacji. */
     najpierwDni?: number;
+    /** Odstęp między pobraniami XML; KSeF pozwala na 16 pobrań na minutę. */
+    odstepMs?: number;
   },
 ): Promise<Raport> {
   const raport: Raport = { pobrano: { zakup: 0, sprzedaz: 0 }, doKolejki: 0, dokonczone: true, bledy: [] };
   let pozostalo = opcje.maksPobran ?? 50;
   const [kandydaci, reguly] = await Promise.all([magazyn.kandydaci(), magazyn.reguly()]);
   const teraz = opcje.teraz ?? new Date();
+  let pobranych = 0;
 
   /** Pobiera brakujące faktury z jednego okna. */
   async function okno(typ: TypPodmiotu, kierunek: Kierunek, od: string, doIso: string) {
@@ -73,6 +76,7 @@ export async function synchronizuj(
           break;
         }
         pozostalo--;
+        if (opcje.odstepMs && pobranych++ > 0) await new Promise((r) => setTimeout(r, opcje.odstepMs));
         try {
           const xml = await klient.pobierzXml(meta.ksefNumber);
           const faktura = parsujFakture(xml);
