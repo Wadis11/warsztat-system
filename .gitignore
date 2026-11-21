@@ -15,3 +15,7 @@ node_modules/
 __pycache__/
 .DS_Store
 supabase/.temp/
+
+# Wyjątek: fikcyjne dane testowe (faktury FA(3) i klucz wygenerowany wyłącznie do testów)
+!supabase/functions/**/testy/*.xml
+!supabase/functions/**/testy/*.pem

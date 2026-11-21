@@ -14,16 +14,24 @@ Specyfikacja: dokument „System zarządzania warsztatem — Moduł 1: Rentowno�
 
 | Katalog | Zawartość |
 | --- | --- |
-| `supabase/migrations/` | Schemat bazy, role, uprawnienia, rejestr zmian |
-| `supabase/tests/` | Testy uprawnień (pracownik vs właściciel) |
+| `supabase/migrations/` | Schemat bazy, role, uprawnienia, rejestr zmian, funkcje zapisu faktur |
+| `supabase/tests/` | Testy SQL: uprawnienia, zapis faktur z KSeF |
+| `supabase/functions/_shared/ksef/` | Klient KSeF 2.0, odczyt FA(3), dopasowanie pozycji do zleceń, synchronizacja |
+| `supabase/functions/ksef-sync/` | Funkcja uruchamiana co godzinę: pobiera nowe faktury z KSeF |
 | `tools/parser/` | Prototyp parsera kosztorysów (Audatex, ControlExpert, skany z poprawkami) |
-| `tools/test_bazy.sh` | Uruchamia migracje i testy na tymczasowym Postgresie |
+| `tools/test_bazy.sh` | Uruchamia migracje i testy SQL na tymczasowym Postgresie |
+| `docs/uruchomienie.md` | Instrukcja pierwszego uruchomienia (Supabase, sekrety, harmonogram) |
 
-## Testy bazy
+## Testy
 
 ```bash
-./tools/test_bazy.sh   # wymaga Postgres 16 (initdb, pg_ctl, psql); nie uruchamiać jako root
+npm test               # moduł KSeF (Node 22+)
+npm run typy           # sprawdzenie typów
+./tools/test_bazy.sh   # baza: wymaga Postgres 16; nie uruchamiać jako root
 ```
+
+Faktury testowe w `supabase/functions/_shared/ksef/testy/` są fikcyjne i przechodzą walidację
+oficjalnym schematem FA(3). Klucz w tym katalogu służy wyłącznie testom.
 
 ## Dane wrażliwe
 

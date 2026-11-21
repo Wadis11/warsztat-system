@@ -1,0 +1,18 @@
+{
+  "name": "warsztat-system",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --no-warnings --test 'supabase/functions/**/*.test.ts'",
+    "test:db": "./tools/test_bazy.sh",
+    "typy": "tsc -p ."
+  },
+  "dependencies": {
+    "fast-xml-parser": "4.5.3"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.119.2",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}

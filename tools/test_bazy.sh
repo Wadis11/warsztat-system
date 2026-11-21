@@ -12,7 +12,8 @@ trap '"$BIN/pg_ctl" -D "$TMP/data" -m immediate stop >/dev/null 2>&1 || true; rm
 "$BIN/initdb" -D "$TMP/data" -U postgres -A trust >/dev/null
 "$BIN/pg_ctl" -D "$TMP/data" -o "-p $PORT -k $TMP" -l "$TMP/log" start -w >/dev/null
 
-PSQL=(psql -h "$TMP" -p "$PORT" -U postgres -d postgres -q -v ON_ERROR_STOP=1)
+"$BIN/createdb" -h "$TMP" -p "$PORT" -U postgres szablon
+PSQL=(psql -h "$TMP" -p "$PORT" -U postgres -d szablon -q -v ON_ERROR_STOP=1)
 
 "${PSQL[@]}" <<'SQL'
 create role authenticated nologin;
@@ -34,8 +35,11 @@ done
                  grant all on all tables in schema public to authenticated;
                  grant all on all sequences in schema public to authenticated;"
 
+# Każdy plik testów dostaje własną, świeżą kopię bazy.
 for f in "$ROOT"/supabase/tests/*.sql; do
   echo "test: $(basename "$f")"
-  "${PSQL[@]}" -f "$f" 2>&1 | grep -E 'ok:|NIE PRZESZ|ERROR' | sed 's/^.*NOTICE:  /  /'; test "${PIPESTATUS[0]}" -eq 0
+  baza="t_$(basename "$f" .sql)"
+  "$BIN/createdb" -h "$TMP" -p "$PORT" -U postgres -T szablon "$baza"
+  psql -h "$TMP" -p "$PORT" -U postgres -d "$baza" -q -v ON_ERROR_STOP=1 -f "$f" 2>&1 | grep -E 'ok:|NIE PRZESZ|ERROR' | sed 's/^.*NOTICE:  /  /'; test "${PIPESTATUS[0]}" -eq 0
 done
 echo "wszystkie testy przeszły"

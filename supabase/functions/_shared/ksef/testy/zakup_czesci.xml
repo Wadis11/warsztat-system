@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/" xmlns:etd="http://crd.gov.pl/xml/schematy/dziedzinowe/mf/2022/01/05/eD/DefinicjeTypy/">
+<Naglowek><KodFormularza kodSystemowy="FA (3)" wersjaSchemy="1-0E">FA</KodFormularza><WariantFormularza>3</WariantFormularza><DataWytworzeniaFa>2026-11-19T10:00:00Z</DataWytworzeniaFa></Naglowek>
+<Podmiot1><DaneIdentyfikacyjne><NIP>9990000001</NIP><Nazwa>Auto-Części Przykład Sp. z o.o.</Nazwa></DaneIdentyfikacyjne><Adres><KodKraju>PL</KodKraju><AdresL1>ul. Testowa 1</AdresL1></Adres></Podmiot1>
+<Podmiot2><DaneIdentyfikacyjne><NIP>1111111111</NIP><Nazwa>Warsztat Testowy</Nazwa></DaneIdentyfikacyjne><Adres><KodKraju>PL</KodKraju><AdresL1>ul. Warsztatowa 2</AdresL1></Adres><JST>2</JST><GV>2</GV></Podmiot2>
+<Fa><KodWaluty>PLN</KodWaluty><P_1>2026-11-19</P_1><P_2>FV/2026/11/4412</P_2><P_13_1>3816.15</P_13_1><P_14_1>877.71</P_14_1><P_15>4693.86</P_15><Adnotacje><P_16>2</P_16><P_17>2</P_17><P_18>2</P_18><P_18A>2</P_18A><Zwolnienie><P_19N>1</P_19N></Zwolnienie><NoweSrodkiTransportu><P_22N>1</P_22N></NoweSrodkiTransportu><P_23>2</P_23><PMarzy><P_PMarzyN>1</P_PMarzyN></PMarzy></Adnotacje><RodzajFaktury>VAT</RodzajFaktury>
+<DodatkowyOpis><Klucz>Uwagi</Klucz><Wartosc>Zlecenie 26-0412, WE 5V073</Wartosc></DodatkowyOpis>
+<FaWiersz><NrWierszaFa>1</NrWierszaFa><P_7>ZDERZAK TYLNY</P_7><Indeks>1 904 748</Indeks><P_8A>szt.</P_8A><P_8B>1.00</P_8B><P_9A>2270.00</P_9A><P_11>2270.00</P_11><P_12>23</P_12></FaWiersz>
+<FaWiersz><NrWierszaFa>2</NrWierszaFa><P_7>ZAMOC WEW L ZDERZ TY</P_7><Indeks>2 337 652</Indeks><P_8A>szt.</P_8A><P_8B>1.00</P_8B><P_9A>187.25</P_9A><P_11>187.25</P_11><P_12>23</P_12></FaWiersz>
+<FaWiersz><NrWierszaFa>3</NrWierszaFa><P_7>OWIEWKA ZDERZAKA PRZ</P_7><Indeks>OE5271142140B0</Indeks><P_8A>szt.</P_8A><P_8B>1.00</P_8B><P_9A>1358.90</P_9A><P_11>1358.90</P_11><P_12>23</P_12></FaWiersz>
+</Fa></Faktura>
