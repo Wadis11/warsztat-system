@@ -58,3 +58,13 @@ do $$ begin
 exception when insufficient_privilege then raise notice 'ok: użytkownik NIE wywoła zapisu faktury';
 end $$;
 reset role;
+
+-- faktury sprzed granicy kolejki nie trafiają do kolejki
+update ustawienia set kolejka_od = '2026-11-20';
+select pg_temp.sprawdz((select count(*) from kolejka_pozycji) = 0, 'faktura sprzed granicy nie jest w kolejce');
+update ustawienia set kolejka_od = '2026-11-01';
+select pg_temp.sprawdz((select count(*) from kolejka_pozycji) = 1, 'faktura po granicy z niepewną pozycją jest w kolejce');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ff', false);
+select pg_temp.sprawdz((select count(*) from kolejka_pozycji) = 0, 'obcy użytkownik nie widzi kolejki');
+reset role;

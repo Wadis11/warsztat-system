@@ -37,7 +37,7 @@ supabase functions deploy ksef-sync --no-verify-jwt
 
 `--no-verify-jwt`, bo funkcja ma własne zabezpieczenie (`SYNC_SEKRET`) i nie jest wywoływana z przeglądarki.
 
-## 5. Harmonogram: co godzinę
+## 5. Harmonogram: co godzinę (na produkcji ustawiony 21.11, o :07)
 
 Co godzinę, bo limit KSeF to 64 pobrane faktury na godzinę. Pierwsze pobranie zaległych faktur od lutego
 (ok. 2–3 tys.) zajmie więc ok. 2 dni, a potem każde uruchomienie pobiera tylko nowe faktury.
