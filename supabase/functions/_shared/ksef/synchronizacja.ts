@@ -35,63 +35,77 @@ export interface Raport {
 }
 
 const TYPY: [TypPodmiotu, Kierunek][] = [["Subject2", "zakup"], ["Subject1", "sprzedaz"]];
+const OKNO_MS = 90 * 24 * 3600 * 1000; // KSeF: zakres dat najwyżej 100 dni
 
 export async function synchronizuj(
   klient: KlientKsef,
   magazyn: Magazyn,
-  opcje: { start: string; maksPobran?: number },
+  opcje: { start: string; maksPobran?: number; teraz?: Date },
 ): Promise<Raport> {
   const raport: Raport = { pobrano: { zakup: 0, sprzedaz: 0 }, doKolejki: 0, dokonczone: true, bledy: [] };
   let pozostalo = opcje.maksPobran ?? 50;
   const [kandydaci, reguly] = await Promise.all([magazyn.kandydaci(), magazyn.reguly()]);
 
+  const teraz = opcje.teraz ?? new Date();
+
   for (const [typ, kierunek] of TYPY) {
-    const od = (await magazyn.punktKontynuacji(typ)) ?? opcje.start;
-    let strona = 0;
-    let hwm: string | undefined;
-    let ostatniPrzetworzony: string | null = null;
-    let przerwano = false;
+    let od = (await magazyn.punktKontynuacji(typ)) ?? opcje.start;
 
+    // KSeF przyjmuje zakres najwyżej 100 dni: idziemy oknami po 90 dni aż do teraz.
     while (true) {
-      const s = await klient.metadane(typ, od, strona);
-      hwm = s.permanentStorageHwmDate ?? hwm;
-      const znane = await magazyn.znaneNumery(s.invoices.map((m) => m.ksefNumber));
+      const koniecOkna = new Date(Math.min(Date.parse(od) + OKNO_MS, teraz.getTime()));
+      const ostatnieOkno = koniecOkna.getTime() >= teraz.getTime();
+      const doIso = koniecOkna.toISOString();
+      let strona = 0;
+      let hwm: string | undefined;
+      let ostatniPrzetworzony: string | null = null;
+      let przerwano = false;
 
-      for (const meta of s.invoices) {
-        if (znane.has(meta.ksefNumber)) {
-          ostatniPrzetworzony = meta.permanentStorageDate;
-          continue;
+      while (true) {
+        const s = await klient.metadane(typ, od, strona, 250, doIso);
+        hwm = s.permanentStorageHwmDate ?? hwm;
+        const znane = await magazyn.znaneNumery(s.invoices.map((m) => m.ksefNumber));
+
+        for (const meta of s.invoices) {
+          if (znane.has(meta.ksefNumber)) {
+            ostatniPrzetworzony = meta.permanentStorageDate;
+            continue;
+          }
+          if (pozostalo <= 0) {
+            przerwano = true;
+            break;
+          }
+          pozostalo--;
+          try {
+            const xml = await klient.pobierzXml(meta.ksefNumber);
+            const faktura = parsujFakture(xml);
+            const zapis = przygotuj(kierunek, meta, xml, faktura, kandydaci, reguly);
+            await magazyn.zapisz(zapis);
+            raport.pobrano[kierunek]++;
+            raport.doKolejki += zapis.pozycje.filter((p) => p.wynik.pewnosc < 0.9).length;
+            ostatniPrzetworzony = meta.permanentStorageDate;
+          } catch (e) {
+            // Zatrzymujemy się na tej fakturze: następne uruchomienie zacznie od niej, nic nie zginie.
+            raport.bledy.push(`${meta.ksefNumber}: ${e instanceof Error ? e.message : String(e)}`);
+            przerwano = true;
+            break;
+          }
         }
-        if (pozostalo <= 0) {
-          przerwano = true;
-          break;
-        }
-        pozostalo--;
-        try {
-          const xml = await klient.pobierzXml(meta.ksefNumber);
-          const faktura = parsujFakture(xml);
-          const zapis = przygotuj(kierunek, meta, xml, faktura, kandydaci, reguly);
-          await magazyn.zapisz(zapis);
-          raport.pobrano[kierunek]++;
-          raport.doKolejki += zapis.pozycje.filter((p) => p.wynik.pewnosc < 0.9).length;
-          ostatniPrzetworzony = meta.permanentStorageDate;
-        } catch (e) {
-          // Zatrzymujemy okno na tej fakturze: następne uruchomienie zacznie od niej, nic nie zginie.
-          raport.bledy.push(`${meta.ksefNumber}: ${e instanceof Error ? e.message : String(e)}`);
-          przerwano = true;
-          break;
-        }
+        if (przerwano || !s.hasMore) break;
+        strona++;
       }
-      if (przerwano || !s.hasMore) break;
-      strona++;
-    }
 
-    if (przerwano) {
-      raport.dokonczone = false;
-      // Początek następnego okna = data ostatniej przetworzonej faktury (włącznie; duplikaty odsiewa numer KSeF)
-      if (ostatniPrzetworzony) await magazyn.ustawPunktKontynuacji(typ, ostatniPrzetworzony);
-    } else if (hwm) {
-      await magazyn.ustawPunktKontynuacji(typ, hwm);
+      if (przerwano) {
+        raport.dokonczone = false;
+        // Początek następnego okna = data ostatniej przetworzonej faktury (włącznie; duplikaty odsiewa numer KSeF)
+        if (ostatniPrzetworzony) await magazyn.ustawPunktKontynuacji(typ, ostatniPrzetworzony);
+        break;
+      }
+      // Okno kompletne: dane są pewne do końca okna, ale nie dalej niż do HWM.
+      const pewneDo = hwm && Date.parse(hwm) < koniecOkna.getTime() ? hwm : doIso;
+      await magazyn.ustawPunktKontynuacji(typ, pewneDo);
+      if (ostatnieOkno || pewneDo !== doIso) break;
+      od = doIso;
     }
   }
   return raport;

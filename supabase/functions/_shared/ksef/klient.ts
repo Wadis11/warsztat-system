@@ -126,14 +126,14 @@ export class KlientKsef {
   }
 
   /** Jedna strona metadanych faktur po dacie trwałego zapisu, ograniczona do HWM (dane kompletne). */
-  async metadane(typ: TypPodmiotu, od: string, strona = 0, rozmiar = 250): Promise<StronaMetadanych> {
+  async metadane(typ: TypPodmiotu, od: string, strona = 0, rozmiar = 250, doDaty?: string): Promise<StronaMetadanych> {
     return this.json<StronaMetadanych>(
       `/invoices/query/metadata?pageOffset=${strona}&pageSize=${rozmiar}&sortOrder=Asc`,
       {
         method: "POST",
         body: JSON.stringify({
           subjectType: typ,
-          dateRange: { dateType: "PermanentStorage", from: od, restrictToPermanentStorageHwmDate: true },
+          dateRange: { dateType: "PermanentStorage", from: od, to: doDaty, restrictToPermanentStorageHwmDate: true },
         }),
       },
     );

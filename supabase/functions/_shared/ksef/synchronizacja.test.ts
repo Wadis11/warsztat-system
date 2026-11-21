@@ -5,6 +5,7 @@ import { synchronizuj, type Magazyn, type ZapisFaktury } from "./synchronizacja.
 import type { KlientKsef, MetadaneFaktury, StronaMetadanych, TypPodmiotu } from "./klient.ts";
 import { normIndeks } from "./dopasowanie.ts";
 
+const TERAZ = new Date("2026-11-21T12:00:00Z");
 const xml = (n: string) => readFileSync(new URL(`./testy/${n}`, import.meta.url), "utf8");
 
 const meta = (nr: string, data: string): MetadaneFaktury => ({
@@ -23,10 +24,15 @@ function ksef(opcje: { zepsuta?: string } = {}) {
     S1: xml("sprzedaz.xml"),
   };
   const pobrane: string[] = [];
+  const zapytania: [string, string][] = [];
   const klient = {
-    async metadane(typ: TypPodmiotu, od: string, strona = 0): Promise<StronaMetadanych> {
+    async metadane(typ: TypPodmiotu, od: string, strona = 0, _r = 250, doD?: string): Promise<StronaMetadanych> {
+      // Jak prawdziwy KSeF: zakres dat najwyżej 100 dni (błąd 21405)
+      const koniec = doD ?? TERAZ.toISOString();
+      if (Date.parse(koniec) - Date.parse(od) > 100 * 864e5) throw new Error("KSeF 400: 'dateRange' must not exceed 100 days.");
+      zapytania.push([od, koniec]);
       const zrodlo = typ === "Subject2" ? zakupy : [meta("S1", "2026-11-21T08:00:00Z")];
-      const pasujace = zrodlo.filter((m) => m.permanentStorageDate >= od);
+      const pasujace = zrodlo.filter((m) => m.permanentStorageDate >= od && m.permanentStorageDate <= koniec);
       const porcja = pasujace.slice(strona * 2, strona * 2 + 2);
       return { hasMore: pasujace.length > (strona + 1) * 2, isTruncated: false,
         permanentStorageHwmDate: "2026-11-21T10:00:00Z", invoices: porcja };
@@ -37,7 +43,7 @@ function ksef(opcje: { zepsuta?: string } = {}) {
       return pliki[nr];
     },
   };
-  return { klient: klient as unknown as KlientKsef, pobrane };
+  return { klient: klient as unknown as KlientKsef, pobrane, zapytania };
 }
 
 function magazyn() {
@@ -62,7 +68,7 @@ function magazyn() {
 test("pełna synchronizacja: wszystkie faktury, punkt kontynuacji = HWM", async () => {
   const { klient } = ksef();
   const { m, punkty, zapisane } = magazyn();
-  const r = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z" });
+  const r = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ });
   assert.deepEqual(r.pobrano, { zakup: 4, sprzedaz: 1 });
   assert.equal(r.dokonczone, true);
   assert.equal(punkty.get("Subject2"), "2026-11-21T10:00:00Z");
@@ -76,9 +82,9 @@ test("pełna synchronizacja: wszystkie faktury, punkt kontynuacji = HWM", async 
 test("powtórne uruchomienie niczego nie pobiera drugi raz", async () => {
   const { klient, pobrane } = ksef();
   const { m } = magazyn();
-  await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z" });
+  await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ });
   const ile = pobrane.length;
-  const r = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z" });
+  const r = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ });
   assert.equal(pobrane.length, ile);
   assert.deepEqual(r.pobrano, { zakup: 0, sprzedaz: 0 });
 });
@@ -86,10 +92,10 @@ test("powtórne uruchomienie niczego nie pobiera drugi raz", async () => {
 test("limit pobrań: przerwa w połowie, następne uruchomienie kończy bez luk", async () => {
   const { klient } = ksef();
   const { m, zapisane } = magazyn();
-  const r1 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", maksPobran: 3 });
+  const r1 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", maksPobran: 3, teraz: TERAZ });
   assert.equal(r1.dokonczone, false);
   assert.equal(zapisane.size, 3);
-  const r2 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", maksPobran: 10 });
+  const r2 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", maksPobran: 10, teraz: TERAZ });
   assert.equal(r2.dokonczone, true);
   assert.deepEqual([...zapisane.keys()].sort(), ["S1", "Z1", "Z2", "Z3", "Z4"]);
 });
@@ -97,9 +103,19 @@ test("limit pobrań: przerwa w połowie, następne uruchomienie kończy bez luk"
 test("uszkodzona faktura: błąd w raporcie, punkt nie przeskakuje jej, reszta czeka", async () => {
   const { klient } = ksef({ zepsuta: "Z2" });
   const { m, punkty, zapisane } = magazyn();
-  const r = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z" });
+  const r = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ });
   assert.equal(r.bledy.length, 1);
   assert.match(r.bledy[0], /^Z2:/);
   assert.ok(zapisane.has("Z1") && !zapisane.has("Z2") && !zapisane.has("Z3"));
   assert.equal(punkty.get("Subject2"), "2026-11-19T10:00:00Z"); // od Z1 włącznie, więc Z2 wróci
+});
+
+test("zaległości od lutego: zapytania oknami po 90 dni, punkt przesuwa się do HWM", async () => {
+  const { klient, zapytania } = ksef();
+  const { m, punkty } = magazyn();
+  const r = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ });
+  assert.equal(r.dokonczone, true);
+  assert.ok(zapytania.length >= 4, `okien: ${zapytania.length}`);
+  for (const [od, doD] of zapytania) assert.ok(Date.parse(doD) - Date.parse(od) <= 100 * 864e5);
+  assert.equal(punkty.get("Subject1"), "2026-11-21T10:00:00Z");
 });
