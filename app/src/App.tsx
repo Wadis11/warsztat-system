@@ -8,6 +8,8 @@ import { Zlecenia } from "./ekrany/Zlecenia.tsx";
 import { NoweZlecenie } from "./ekrany/NoweZlecenie.tsx";
 import { WgrajKosztorys } from "./ekrany/WgrajKosztorys.tsx";
 import { KartaPracy } from "./ekrany/KartaPracy.tsx";
+import { Zlecenie } from "./ekrany/Zlecenie.tsx";
+import { Pracownicy } from "./ekrany/Pracownicy.tsx";
 
 export type Rola = "wlasciciel" | "pracownik";
 export type Widok =
@@ -15,6 +17,8 @@ export type Widok =
   | { ekran: "zlecenia" }
   | { ekran: "nowe" }
   | { ekran: "kosztorys" }
+  | { ekran: "pracownicy" }
+  | { ekran: "zlecenie"; zlecenieId: string }
   | { ekran: "karta"; zlecenieId: string };
 
 export interface Kontekst {
@@ -88,6 +92,7 @@ export function App() {
         {pozycja("zlecenia", "Zlecenia")}
         {pozycja("nowe", "Nowe zlecenie")}
         {rola === "wlasciciel" && pozycja("kosztorys", "Wgraj kosztorys")}
+        {rola === "wlasciciel" && pozycja("pracownicy", "Pracownicy")}
         <div className="stopka">
           {sesja.user.email}<br />
           <button style={{ padding: "8px 0", color: "#aeb6c2" }} onClick={() => db.auth.signOut()}>Wyloguj</button>
@@ -98,6 +103,8 @@ export function App() {
         {widok.ekran === "zlecenia" && <Zlecenia {...k} />}
         {widok.ekran === "nowe" && <NoweZlecenie {...k} />}
         {widok.ekran === "kosztorys" && <WgrajKosztorys {...k} />}
+        {widok.ekran === "pracownicy" && <Pracownicy {...k} />}
+        {widok.ekran === "zlecenie" && <Zlecenie key={widok.zlecenieId} {...k} zlecenieId={widok.zlecenieId} />}
         {widok.ekran === "karta" && <KartaPracy {...k} zlecenieId={widok.zlecenieId} />}
       </main>
     </div>

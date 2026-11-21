@@ -61,3 +61,6 @@ textarea { min-height: 120px; }
 .karta-pracy h1 { font-size: 34px; }
 .karta-pracy .duzy { font-size: 20px; font-weight: 600; }
 .karta-pracy ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.link { all: unset; cursor: pointer; color: var(--akcent); }
+.link:hover { text-decoration: underline; }
+.link:focus-visible { outline: 2px solid var(--akcent); }

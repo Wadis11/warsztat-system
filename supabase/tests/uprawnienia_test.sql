@@ -63,6 +63,12 @@ do $$ begin
 exception when insufficient_privilege then raise notice 'ok: pracownik NIE zapisuje kosztorysów';
 end $$;
 
+do $$ begin
+  insert into pracownicy (imie) values ('Ktoś');
+  raise exception 'NIE PRZESZŁO: pracownik dodał pracownika';
+exception when insufficient_privilege then raise notice 'ok: pracownik NIE dodaje pracowników';
+end $$;
+
 delete from zlecenia where nr_rej = 'KR 12345';
 select pg_temp.sprawdz((select count(*) from zlecenia) = 2, 'pracownik NIE usuwa zleceń');
 
@@ -86,5 +92,24 @@ select pg_temp.sprawdz((select count(*) from rejestr_zmian where tabela = 'zlece
 select pg_temp.sprawdz((select kto from rejestr_zmian where tabela = 'zlecenia' and po ->> 'nr_rej' = 'KR 12345' limit 1)
                        = '00000000-0000-0000-0000-00000000000b', 'rejestr wie, kto dodał zlecenie');
 select pg_temp.sprawdz(norm_indeks('6508-05-8186249P') = '6508058186249P', 'normalizacja indeksu części');
+
+-- Pracownicy: przypisanie i podział RBH
+update kosztorysy set rbh_blach = 10, rbh_lak = 6, robocizna_blach = 1800, robocizna_lak = 1080;
+insert into pracownicy (id, imie, specjalizacja) values
+  ('30000000-0000-0000-0000-000000000001', 'Blacharz A', 'blacharz'),
+  ('30000000-0000-0000-0000-000000000002', 'Blacharz B', 'blacharz'),
+  ('30000000-0000-0000-0000-000000000003', 'Lakiernik', 'lakiernik');
+insert into zlecenia_pracownicy (zlecenie_id, pracownik_id, rola) values
+  ('20000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'blacharz'),
+  ('20000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002', 'blacharz'),
+  ('20000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000003', 'lakiernik');
+select pg_temp.sprawdz((select rbh from udzial_pracownikow where pracownik_id = '30000000-0000-0000-0000-000000000001') = 5,
+                       'dwóch blacharzy dzieli RBH po równo');
+select pg_temp.sprawdz((select robocizna from udzial_pracownikow where pracownik_id = '30000000-0000-0000-0000-000000000003') = 1080,
+                       'lakiernik dostaje robociznę lakierniczą');
+select pg_temp.jako('00000000-0000-0000-0000-00000000000b');
+select pg_temp.sprawdz((select count(*) from udzial_pracownikow) = 3 and (select max(rbh) from udzial_pracownikow) is null,
+                       'pracownik widzi przypisania, ale NIE kwoty i RBH');
+select pg_temp.jako('00000000-0000-0000-0000-00000000000a');
 
 reset role;
