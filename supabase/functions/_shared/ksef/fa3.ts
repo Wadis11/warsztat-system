@@ -62,6 +62,17 @@ const sum = (fa: X, keys: string[]) =>
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Część dostawców wystawia faktury „od brutto”: wiersz ma tylko P_11A (wartość brutto).
+// Wtedy netto wiersza = brutto / (1 + stawka); stawki nienumeryczne (zw, np, oo) liczymy jako 0%.
+function nettoWiersza(w: X): number {
+  const netto = num(w.P_11);
+  if (netto !== null) return netto;
+  const brutto = num(w.P_11A);
+  if (brutto === null) return 0;
+  const stawka = Number(txt(w.P_12));
+  return round2(brutto / (1 + (Number.isFinite(stawka) ? stawka / 100 : 0)));
+}
+
 // Pola P_13_x to kwoty netto w poszczególnych stawkach, P_14_x to VAT.
 const NETTO = ["P_13_1", "P_13_2", "P_13_3", "P_13_4", "P_13_5", "P_13_6_1", "P_13_6_2", "P_13_6_3", "P_13_7", "P_13_8", "P_13_9", "P_13_10", "P_13_11"];
 const VAT = ["P_14_1", "P_14_2", "P_14_3", "P_14_4", "P_14_5"];
@@ -83,7 +94,7 @@ export function parsujFakture(xml: string): Faktura {
     jednostka: txt(w.P_8A),
     cenaNetto: num(w.P_9A),
     // P_11 = wartość netto wiersza; przy fakturach liczonych od brutto bywa tylko P_11A
-    netto: num(w.P_11) ?? num(w.P_11A) ?? 0,
+    netto: nettoWiersza(w),
     stawkaVat: txt(w.P_12),
     stanPrzed: txt(w.StanPrzed) === "1",
   }));

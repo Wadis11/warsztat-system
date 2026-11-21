@@ -50,3 +50,9 @@ test("korekta: numer korygowanej faktury i zmiana kosztu ze „stanu przed”", 
 test("dokument, który nie jest fakturą, daje czytelny błąd", () => {
   assert.throws(() => parsujFakture("<Inny/>"), /brak elementu Faktura/);
 });
+
+test("faktura liczona od brutto (tylko P_11A): netto wiersza z odjęciem VAT, zgodne z nagłówkiem", () => {
+  const f = parsujFakture(wczytaj("zakup_brutto.xml"));
+  assert.equal(f.netto, 2139.84);
+  assert.equal(f.pozycje[0].netto, 2139.84);
+});
