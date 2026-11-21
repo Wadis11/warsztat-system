@@ -67,7 +67,11 @@ export class KlientKsef {
     const res = await this.f(`${this.baseUrl}${sciezka}`, { ...init, headers: naglowki });
     if (res.status === 429 && proby > 0) {
       const sek = Number(res.headers.get("Retry-After") ?? "5");
-      const ms = Math.min((Number.isFinite(sek) ? sek : 5) * 1000, this.opcje.maksCzekanieMs ?? 60_000);
+      const ms = (Number.isFinite(sek) ? sek : 5) * 1000;
+      // Limit godzinowy (Retry-After w minutach): nie czekamy, kolejne uruchomienie dokończy pracę.
+      if (ms > (this.opcje.maksCzekanieMs ?? 60_000)) {
+        throw new BladKsef(429, (await res.text()).slice(0, 500));
+      }
       await res.body?.cancel();
       await czekaj(ms);
       return this.zadanie(sciezka, init, token, proby - 1);

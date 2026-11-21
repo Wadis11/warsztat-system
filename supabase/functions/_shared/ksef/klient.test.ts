@@ -12,7 +12,7 @@ const CERT = readFileSync(sciezka("certyfikat-testowy.b64"), "utf8").trim();
 const KLUCZ = createPrivateKey(readFileSync(sciezka("klucz-testowy-NIE-PRODUKCYJNY.pem")));
 const XML = readFileSync(sciezka("zakup_czesci.xml"), "utf8");
 
-function atrapa(opcje: { token: string; nip: string; statusy?: number[]; limitRaz?: boolean }) {
+function atrapa(opcje: { token: string; nip: string; statusy?: number[]; limitRaz?: boolean; retryAfter?: string }) {
   const log: string[] = [];
   const statusy = [...(opcje.statusy ?? [200])];
   let limitWykorzystany = false;
@@ -52,7 +52,7 @@ function atrapa(opcje: { token: string; nip: string; statusy?: number[]; limitRa
     if (p === "/invoices/query/metadata") {
       if (opcje.limitRaz && !limitWykorzystany) {
         limitWykorzystany = true;
-        return new Response("{}", { status: 429, headers: { "Retry-After": "1" } });
+        return new Response("{}", { status: 429, headers: { "Retry-After": opcje.retryAfter ?? "1" } });
       }
       const body = JSON.parse(String(init.body));
       assert.equal(body.subjectType, "Subject2");
@@ -102,9 +102,18 @@ test("unieważniony token: status 450 przerywa logowanie", async () => {
 
 test("limit 429: czeka zgodnie z Retry-After i ponawia", async () => {
   const a = atrapa({ token: "T", nip: "1111111111", limitRaz: true });
-  const k = new KlientKsef(BAZA, { fetch: a.fetch, maksCzekanieMs: 10 });
+  const k = new KlientKsef(BAZA, { fetch: a.fetch, maksCzekanieMs: 2000 });
   await k.zaloguj("1111111111", "T", { proby: 2, odstepMs: 1 });
   const s = await k.metadane("Subject2", "2026-02-01T00:00:00Z");
   assert.equal(s.hasMore, false);
   assert.equal(a.log.filter((l) => l === "POST /invoices/query/metadata").length, 2);
+});
+
+test("limit godzinowy 429 (Retry-After w minutach): błąd od razu, bez czekania", async () => {
+  const a = atrapa({ token: "T", nip: "1111111111", limitRaz: true, retryAfter: "3221" });
+  const k = new KlientKsef(BAZA, { fetch: a.fetch, maksCzekanieMs: 20_000 });
+  await k.zaloguj("1111111111", "T", { proby: 2, odstepMs: 1 });
+  const start = Date.now();
+  await assert.rejects(k.metadane("Subject2", "2026-02-01T00:00:00Z"), (e: unknown) => e instanceof BladKsef && e.status === 429);
+  assert.ok(Date.now() - start < 1000);
 });

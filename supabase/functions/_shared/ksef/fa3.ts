@@ -74,7 +74,9 @@ export function parsujFakture(xml: string): Faktura {
   if (!fa) throw new Error("Brak sekcji Fa");
 
   const pozycje: PozycjaFaktury[] = (fa.FaWiersz ?? []).map((w: X, i: number) => ({
-    lp: num(w.NrWierszaFa) ?? i + 1,
+    // Kolejny numer wiersza w dokumencie. NrWierszaFa bywa powtórzony (korekty: wiersz „przed” i „po”
+    // mają ten sam numer; niektóre programy też go dublują), więc nie nadaje się na klucz.
+    lp: i + 1,
     nazwa: txt(w.P_7) ?? "(bez nazwy)",
     indeks: txt(w.Indeks),
     ilosc: num(w.P_8B),

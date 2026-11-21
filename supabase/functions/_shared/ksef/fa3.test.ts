@@ -41,6 +41,8 @@ test("korekta: numer korygowanej faktury i zmiana kosztu ze „stanu przed”", 
   assert.equal(f.rodzaj, "KOR");
   assert.equal(f.korygowanaNrKsef, "9990000001-20261119-0A1B2C3D4E5F-AB");
   assert.equal(f.netto, -187.25);
+  // wiersze „przed” i „po” mają w XML ten sam NrWierszaFa; w systemie muszą mieć różne numery
+  assert.deepEqual(f.pozycje.map((p) => p.lp), [1, 2]);
   const zmiana = f.pozycje.reduce((a, p) => a + wartoscDoRozliczenia(p), 0);
   assert.equal(zmiana, -187.25);
 });
