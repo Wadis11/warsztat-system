@@ -7,7 +7,7 @@ alter table synchronizacja_ksef
   add column punkt_zakupy   timestamptz,
   add column punkt_sprzedaz timestamptz,
   add column ostatni_raport jsonb;
-alter table synchronizacja_ksef drop column pobrano_do;
+comment on column synchronizacja_ksef.pobrano_do is 'Nieużywana, zastąpiona przez punkt_zakupy i punkt_sprzedaz';
 insert into synchronizacja_ksef (id) values (1) on conflict do nothing;
 
 alter table faktury
