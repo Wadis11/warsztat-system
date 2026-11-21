@@ -40,72 +40,90 @@ const OKNO_MS = 90 * 24 * 3600 * 1000; // KSeF: zakres dat najwyżej 100 dni
 export async function synchronizuj(
   klient: KlientKsef,
   magazyn: Magazyn,
-  opcje: { start: string; maksPobran?: number; teraz?: Date; terminMs?: number },
+  opcje: {
+    start: string; maksPobran?: number; teraz?: Date; terminMs?: number;
+    /** Najpierw ostatnie N dni (bieżące płatności i zlecenia), dopiero potem zaległości od punktu kontynuacji. */
+    najpierwDni?: number;
+  },
 ): Promise<Raport> {
   const raport: Raport = { pobrano: { zakup: 0, sprzedaz: 0 }, doKolejki: 0, dokonczone: true, bledy: [] };
   let pozostalo = opcje.maksPobran ?? 50;
   const [kandydaci, reguly] = await Promise.all([magazyn.kandydaci(), magazyn.reguly()]);
-
   const teraz = opcje.teraz ?? new Date();
 
+  /** Pobiera brakujące faktury z jednego okna. */
+  async function okno(typ: TypPodmiotu, kierunek: Kierunek, od: string, doIso: string) {
+    let strona = 0;
+    let hwm: string | undefined;
+    let ostatniPrzetworzony: string | null = null;
+    let przerwano = false;
+    while (true) {
+      const s = await klient.metadane(typ, od, strona, 250, doIso);
+      hwm = s.permanentStorageHwmDate ?? hwm;
+      const znane = await magazyn.znaneNumery(s.invoices.map((m) => m.ksefNumber));
+
+      for (const meta of s.invoices) {
+        if (znane.has(meta.ksefNumber)) {
+          ostatniPrzetworzony = meta.permanentStorageDate;
+          continue;
+        }
+        // Limit pobrań albo czasu (funkcja Supabase ma twardy limit czasu): kończymy porządnie i zapisujemy stan.
+        if (pozostalo <= 0 || (opcje.terminMs !== undefined && Date.now() > opcje.terminMs)) {
+          przerwano = true;
+          break;
+        }
+        pozostalo--;
+        try {
+          const xml = await klient.pobierzXml(meta.ksefNumber);
+          const faktura = parsujFakture(xml);
+          const zapis = przygotuj(kierunek, meta, xml, faktura, kandydaci, reguly);
+          await magazyn.zapisz(zapis);
+          raport.pobrano[kierunek]++;
+          raport.doKolejki += zapis.pozycje.filter((p) => p.wynik.pewnosc < 0.9).length;
+          ostatniPrzetworzony = meta.permanentStorageDate;
+        } catch (e) {
+          // Zatrzymujemy się na tej fakturze: następne uruchomienie zacznie od niej, nic nie zginie.
+          const opis = `${meta.ksefNumber}: ${e instanceof Error ? e.message : String(e)}`;
+          console.error(opis);
+          raport.bledy.push(opis);
+          przerwano = true;
+          break;
+        }
+      }
+      if (przerwano || !s.hasMore) break;
+      strona++;
+    }
+    return { przerwano, ostatniPrzetworzony, hwm };
+  }
+
+  // 1. Bieżące dni najpierw, jeśli zaległości jeszcze do nich nie doszły. Punkt kontynuacji bez zmian.
+  if (opcje.najpierwDni) {
+    const odBiezace = new Date(teraz.getTime() - opcje.najpierwDni * 864e5).toISOString();
+    for (const [typ, kierunek] of TYPY) {
+      const punkt = (await magazyn.punktKontynuacji(typ)) ?? opcje.start;
+      if (Date.parse(punkt) >= Date.parse(odBiezace)) continue;
+      const w = await okno(typ, kierunek, odBiezace, teraz.toISOString());
+      if (w.przerwano) { raport.dokonczone = false; return raport; }
+    }
+  }
+
+  // 2. Zaległości od punktu kontynuacji, oknami po 90 dni (KSeF przyjmuje zakres najwyżej 100 dni).
   for (const [typ, kierunek] of TYPY) {
     let od = (await magazyn.punktKontynuacji(typ)) ?? opcje.start;
-
-    // KSeF przyjmuje zakres najwyżej 100 dni: idziemy oknami po 90 dni aż do teraz.
     while (true) {
       const koniecOkna = new Date(Math.min(Date.parse(od) + OKNO_MS, teraz.getTime()));
       const ostatnieOkno = koniecOkna.getTime() >= teraz.getTime();
       const doIso = koniecOkna.toISOString();
-      let strona = 0;
-      let hwm: string | undefined;
-      let ostatniPrzetworzony: string | null = null;
-      let przerwano = false;
+      const w = await okno(typ, kierunek, od, doIso);
 
-      while (true) {
-        const s = await klient.metadane(typ, od, strona, 250, doIso);
-        hwm = s.permanentStorageHwmDate ?? hwm;
-        const znane = await magazyn.znaneNumery(s.invoices.map((m) => m.ksefNumber));
-
-        for (const meta of s.invoices) {
-          if (znane.has(meta.ksefNumber)) {
-            ostatniPrzetworzony = meta.permanentStorageDate;
-            continue;
-          }
-          // Limit pobrań albo czasu (funkcja Supabase ma twardy limit czasu): kończymy porządnie i zapisujemy stan.
-          if (pozostalo <= 0 || (opcje.terminMs !== undefined && Date.now() > opcje.terminMs)) {
-            przerwano = true;
-            break;
-          }
-          pozostalo--;
-          try {
-            const xml = await klient.pobierzXml(meta.ksefNumber);
-            const faktura = parsujFakture(xml);
-            const zapis = przygotuj(kierunek, meta, xml, faktura, kandydaci, reguly);
-            await magazyn.zapisz(zapis);
-            raport.pobrano[kierunek]++;
-            raport.doKolejki += zapis.pozycje.filter((p) => p.wynik.pewnosc < 0.9).length;
-            ostatniPrzetworzony = meta.permanentStorageDate;
-          } catch (e) {
-            // Zatrzymujemy się na tej fakturze: następne uruchomienie zacznie od niej, nic nie zginie.
-            const opis = `${meta.ksefNumber}: ${e instanceof Error ? e.message : String(e)}`;
-            console.error(opis);
-            raport.bledy.push(opis);
-            przerwano = true;
-            break;
-          }
-        }
-        if (przerwano || !s.hasMore) break;
-        strona++;
-      }
-
-      if (przerwano) {
+      if (w.przerwano) {
         raport.dokonczone = false;
         // Początek następnego okna = data ostatniej przetworzonej faktury (włącznie; duplikaty odsiewa numer KSeF)
-        if (ostatniPrzetworzony) await magazyn.ustawPunktKontynuacji(typ, ostatniPrzetworzony);
+        if (w.ostatniPrzetworzony) await magazyn.ustawPunktKontynuacji(typ, w.ostatniPrzetworzony);
         break;
       }
       // Okno kompletne: dane są pewne do końca okna, ale nie dalej niż do HWM.
-      const pewneDo = hwm && Date.parse(hwm) < koniecOkna.getTime() ? hwm : doIso;
+      const pewneDo = w.hwm && Date.parse(w.hwm) < koniecOkna.getTime() ? w.hwm : doIso;
       await magazyn.ustawPunktKontynuacji(typ, pewneDo);
       if (ostatnieOkno || pewneDo !== doIso) break;
       od = doIso;

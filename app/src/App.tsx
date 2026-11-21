@@ -6,10 +6,10 @@ import { DrugiSkladnik } from "./ekrany/DrugiSkladnik.tsx";
 import { Kolejka } from "./ekrany/Kolejka.tsx";
 import { Zlecenia } from "./ekrany/Zlecenia.tsx";
 import { NoweZlecenie } from "./ekrany/NoweZlecenie.tsx";
-import { WgrajKosztorys } from "./ekrany/WgrajKosztorys.tsx";
 import { KartaPracy } from "./ekrany/KartaPracy.tsx";
 import { Zlecenie } from "./ekrany/Zlecenie.tsx";
 import { Pracownicy } from "./ekrany/Pracownicy.tsx";
+import { Platnosci } from "./ekrany/Platnosci.tsx";
 
 export type Rola = "wlasciciel" | "pracownik";
 export type Widok =
@@ -18,6 +18,7 @@ export type Widok =
   | { ekran: "nowe" }
   | { ekran: "kosztorys" }
   | { ekran: "pracownicy" }
+  | { ekran: "platnosci" }
   | { ekran: "zlecenie"; zlecenieId: string }
   | { ekran: "karta"; zlecenieId: string };
 
@@ -32,6 +33,7 @@ export function App() {
   const [rola, ustawRole] = useState<Rola | null | undefined>(undefined);
   const [widok, ustawWidok] = useState<Widok>({ ekran: "zlecenia" });
   const [wKolejce, ustawWKolejce] = useState<number | null>(null);
+  const [wTerminie, ustawWTerminie] = useState<number | null>(null);
 
   useEffect(() => {
     db.auth.getSession().then(({ data }) => ustawSesje(data.session));
@@ -57,6 +59,9 @@ export function App() {
     if (rola !== "wlasciciel" || poziom?.obecny !== "aal2") return;
     const { count } = await db.from("kolejka_pozycji").select("id", { count: "exact", head: true });
     ustawWKolejce(count ?? 0);
+    // Płatności po terminie albo do 3 dni
+    const t = await db.from("platnosci").select("id", { count: "exact", head: true }).eq("status", "do_zaplaty").lte("dni_do_terminu", 3);
+    ustawWTerminie(t.count ?? 0);
   }, [rola, poziom]);
   useEffect(() => { odswiezLicznik(); }, [odswiezLicznik, widok]);
 
@@ -91,7 +96,7 @@ export function App() {
         {rola === "wlasciciel" && pozycja("kolejka", "Do sprawdzenia", wKolejce)}
         {pozycja("zlecenia", "Zlecenia")}
         {pozycja("nowe", "Nowe zlecenie")}
-        {rola === "wlasciciel" && pozycja("kosztorys", "Wgraj kosztorys")}
+        {rola === "wlasciciel" && pozycja("platnosci", "Płatności", wTerminie)}
         {rola === "wlasciciel" && pozycja("pracownicy", "Pracownicy")}
         <div className="stopka">
           {sesja.user.email}<br />
@@ -102,7 +107,8 @@ export function App() {
         {widok.ekran === "kolejka" && <Kolejka {...k} poZmianie={odswiezLicznik} />}
         {widok.ekran === "zlecenia" && <Zlecenia {...k} />}
         {widok.ekran === "nowe" && <NoweZlecenie {...k} />}
-        {widok.ekran === "kosztorys" && <WgrajKosztorys {...k} />}
+        {widok.ekran === "kosztorys" && <NoweZlecenie {...k} tryb="kosztorys" />}
+        {widok.ekran === "platnosci" && <Platnosci {...k} />}
         {widok.ekran === "pracownicy" && <Pracownicy {...k} />}
         {widok.ekran === "zlecenie" && <Zlecenie key={widok.zlecenieId} {...k} zlecenieId={widok.zlecenieId} />}
         {widok.ekran === "karta" && <KartaPracy {...k} zlecenieId={widok.zlecenieId} />}

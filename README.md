@@ -17,7 +17,8 @@ Specyfikacja: dokument „System zarządzania warsztatem — Moduł 1: Rentowno�
 | `supabase/migrations/` | Schemat bazy, role, uprawnienia, rejestr zmian, funkcje zapisu faktur |
 | `supabase/tests/` | Testy SQL: uprawnienia, zapis faktur z KSeF |
 | `supabase/functions/_shared/ksef/` | Klient KSeF 2.0, odczyt FA(3), dopasowanie pozycji do zleceń, synchronizacja |
-| `supabase/functions/ksef-sync/` | Funkcja uruchamiana co godzinę: pobiera nowe faktury z KSeF |
+| `supabase/functions/ksef-sync/` | Funkcja uruchamiana co godzinę: pobiera nowe faktury z KSeF (najpierw ostatnie 60 dni, potem zaległości) |
+| `supabase/functions/biala-lista/` | Sprawdzanie rachunków dostawców na białej liście VAT dla faktur do zapłaty |
 | `app/` | Aplikacja webowa (React + Vite): logowanie z 2FA, kolejka faktur, zlecenia, wgrywanie kosztorysów, karta pracy |
 | `app/src/kosztorys/` | Parser kosztorysów w TypeScript (działa w przeglądarce, PDF nie opuszcza bazy firmy) |
 | `netlify.toml` | Konfiguracja hostingu aplikacji |

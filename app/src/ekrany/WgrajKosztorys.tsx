@@ -188,9 +188,7 @@ export function WgrajKosztorys({ przejdz }: Kontekst) {
 
   return (
     <div className="kolumna">
-      <div className="naglowek"><div><h1>Wgraj kosztorys</h1>
-        <p className="podtytul">Audatex (nasz, Ayvens, UNIQA) albo weryfikacja ControlExpert. Zakłada zlecenie albo dopina kosztorys do otwartego zlecenia tego auta.</p></div></div>
-
+      <p className="cichy" style={{ margin: 0 }}>Audatex (nasz, Ayvens, UNIQA) albo weryfikacja ControlExpert. Jeśli to auto ma już otwarte zlecenie, kosztorys dopnie się do niego (np. weryfikacja ubezpieczyciela do naszego kosztorysu).</p>
       <section className="karta"><div className="srodek">
         <input type="file" accept="application/pdf" aria-label="Plik PDF kosztorysu"
           onChange={(e) => e.target.files?.[0] && wczytajPlik(e.target.files[0])} />

@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
     const raport = await synchronizuj(klient, magazynSupabase(db), {
       start: env("KSEF_START", "2026-02-01T00:00:00Z"),
       terminMs: Date.parse(start) + 100_000,
+      najpierwDni: 60, // bieżące płatności i zlecenia przed zaległościami od lutego
     });
     await db.from("synchronizacja_ksef").upsert({
       id: 1, ostatni_raport: raport, ostatni_blad: raport.bledy.length ? raport.bledy.join("\n") : null,

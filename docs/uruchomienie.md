@@ -81,3 +81,18 @@ Błąd uwierzytelnienia (np. kod 450) oznacza zły albo unieważniony token: wyg
 4. Właściciel przy pierwszym logowaniu skanuje kod QR w aplikacji uwierzytelniającej
    (Google Authenticator, Microsoft Authenticator, 1Password). Bez drugiego składnika baza
    nie wydaje danych finansowych nawet z poprawnym hasłem.
+
+## 8. Biała lista VAT (płatności)
+
+Funkcja `biala-lista` sprawdza rachunki z faktur do zapłaty w wykazie MF (wl-api.mf.gov.pl)
+i zapisuje wynik z identyfikatorem zapytania (dowód sprawdzenia). Harmonogram: 6:37 i 12:37 czasu polskiego.
+
+```sql
+select cron.schedule('biala-lista', '37 5,11 * * *', $$
+  select net.http_post(
+    url := 'https://<ID_PROJEKTU>.supabase.co/functions/v1/biala-lista',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'x-sync-sekret', (select decrypted_secret from vault.decrypted_secrets where name = 'sync_sekret')),
+    body := '{}'::jsonb, timeout_milliseconds := 60000);
+$$);
+```

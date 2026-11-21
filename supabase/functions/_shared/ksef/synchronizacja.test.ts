@@ -130,3 +130,17 @@ test("limit czasu: przerwa przed przekroczeniem, stan zapisany, kolejne uruchomi
   assert.equal(r2.dokonczone, true);
   assert.equal(zapisane.size, 5);
 });
+
+test("najpierw bieżące dni: świeże faktury przed zaległościami, punkt kontynuacji nie przeskakuje", async () => {
+  const { klient, pobrane } = ksef();
+  const { m, punkty, zapisane } = magazyn();
+  // Z1 jest sprzed 1,5 dnia, Z2–Z4 i S1 z ostatnich 1,5 dnia
+  const r1 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ, maksPobran: 3, najpierwDni: 1.5 });
+  assert.equal(r1.dokonczone, false);
+  assert.deepEqual(pobrane, ["Z2", "Z3", "Z4"]);
+  assert.equal(punkty.get("Subject2"), undefined);
+  const r2 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ, najpierwDni: 1.5 });
+  assert.equal(r2.dokonczone, true);
+  assert.deepEqual([...zapisane.keys()].sort(), ["S1", "Z1", "Z2", "Z3", "Z4"]);
+  assert.equal(punkty.get("Subject2"), "2026-11-21T10:00:00Z");
+});

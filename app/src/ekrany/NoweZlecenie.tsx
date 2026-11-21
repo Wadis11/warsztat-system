@@ -3,8 +3,27 @@ import { type FormEvent, useState } from "react";
 import type { Kontekst } from "../App.tsx";
 import { db } from "../supabase.ts";
 import { WyborKlienta } from "./WyborKlienta.tsx";
+import { WgrajKosztorys } from "./WgrajKosztorys.tsx";
 
-export function NoweZlecenie({ przejdz }: Kontekst) {
+/** Nowe zlecenie: z kosztorysu PDF (właściciel) albo ręcznie. */
+export function NoweZlecenie(k: Kontekst & { tryb?: "kosztorys" | "reczne" }) {
+  const wlasciciel = k.rola === "wlasciciel";
+  const [tryb, ustawTryb] = useState<"kosztorys" | "reczne">(wlasciciel ? k.tryb ?? "kosztorys" : "reczne");
+  return (
+    <div className="kolumna">
+      <div className="naglowek"><div><h1>Nowe zlecenie</h1>
+        <p className="podtytul">Numer zlecenia nadaje się sam. {wlasciciel ? "Z kosztorysu Audatex/ControlExpert dane auta i kwoty wczytają się z PDF." : ""}</p></div>
+        {wlasciciel && <div className="przyciski">
+          <button className={`przycisk ${tryb === "kosztorys" ? "" : "drugi"}`} onClick={() => ustawTryb("kosztorys")}>Z kosztorysu (PDF)</button>
+          <button className={`przycisk ${tryb === "reczne" ? "" : "drugi"}`} onClick={() => ustawTryb("reczne")}>Ręcznie</button>
+        </div>}
+      </div>
+      {tryb === "kosztorys" ? <WgrajKosztorys {...k} /> : <FormularzReczny {...k} />}
+    </div>
+  );
+}
+
+function FormularzReczny({ przejdz }: Kontekst) {
   const [f, ustawF] = useState({ nr_rej: "", vin: "", marka: "", model: "", nr_szkody: "", zakres_prac: "" });
   const [klient, ustawKlienta] = useState("");
   const [blad, ustawBlad] = useState<string | null>(null);
@@ -31,8 +50,6 @@ export function NoweZlecenie({ przejdz }: Kontekst) {
 
   return (
     <form className="kolumna" onSubmit={zapisz}>
-      <div className="naglowek"><div><h1>Nowe zlecenie</h1>
-        <p className="podtytul">Numer zlecenia nadaje się sam. Zlecenia z kosztorysem Audatex zakładaj przez „Wgraj kosztorys”.</p></div></div>
       <section className="karta"><div className="srodek" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div className="siatka">
           <label>Numer rejestracyjny<input required {...pole("nr_rej")} placeholder="KR 12345" /></label>
