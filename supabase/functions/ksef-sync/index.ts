@@ -29,9 +29,13 @@ Deno.serve(async (req) => {
   await db.from("synchronizacja_ksef").upsert({ id: 1, ostatni_start: start });
 
   try {
-    const klient = new KlientKsef(SRODOWISKA[srodowisko]);
+    const klient = new KlientKsef(SRODOWISKA[srodowisko], { maksCzekanieMs: 20_000 });
     await klient.zaloguj(env("KSEF_NIP"), env("KSEF_TOKEN"));
-    const raport = await synchronizuj(klient, magazynSupabase(db), { start: env("KSEF_START", "2026-02-01T00:00:00Z") });
+    // Funkcja Supabase ma limit 150 s; kończymy pobieranie po 100 s, żeby zdążyć zapisać stan i raport.
+    const raport = await synchronizuj(klient, magazynSupabase(db), {
+      start: env("KSEF_START", "2026-02-01T00:00:00Z"),
+      terminMs: Date.parse(start) + 100_000,
+    });
     await db.from("synchronizacja_ksef").upsert({
       id: 1, ostatni_raport: raport, ostatni_blad: raport.bledy.length ? raport.bledy.join("\n") : null,
     });
@@ -39,6 +43,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     // Nie zwracamy szczegółów na zewnątrz; zapisujemy je dla właściciela.
     const opis = e instanceof Error ? e.message : String(e);
+    console.error(opis);
     await db.from("synchronizacja_ksef").upsert({ id: 1, ostatni_blad: opis });
     return new Response("Synchronizacja nie powiodła się", { status: 500 });
   }

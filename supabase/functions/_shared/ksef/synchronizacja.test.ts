@@ -119,3 +119,14 @@ test("zaległości od lutego: zapytania oknami po 90 dni, punkt przesuwa się do
   for (const [od, doD] of zapytania) assert.ok(Date.parse(doD) - Date.parse(od) <= 100 * 864e5);
   assert.equal(punkty.get("Subject1"), "2026-11-21T10:00:00Z");
 });
+
+test("limit czasu: przerwa przed przekroczeniem, stan zapisany, kolejne uruchomienie kontynuuje", async () => {
+  const { klient } = ksef();
+  const { m, zapisane } = magazyn();
+  const r1 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ, terminMs: Date.now() - 1 });
+  assert.equal(r1.dokonczone, false);
+  assert.equal(zapisane.size, 0);
+  const r2 = await synchronizuj(klient, m, { start: "2026-02-01T00:00:00Z", teraz: TERAZ });
+  assert.equal(r2.dokonczone, true);
+  assert.equal(zapisane.size, 5);
+});

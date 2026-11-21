@@ -40,7 +40,7 @@ const OKNO_MS = 90 * 24 * 3600 * 1000; // KSeF: zakres dat najwyżej 100 dni
 export async function synchronizuj(
   klient: KlientKsef,
   magazyn: Magazyn,
-  opcje: { start: string; maksPobran?: number; teraz?: Date },
+  opcje: { start: string; maksPobran?: number; teraz?: Date; terminMs?: number },
 ): Promise<Raport> {
   const raport: Raport = { pobrano: { zakup: 0, sprzedaz: 0 }, doKolejki: 0, dokonczone: true, bledy: [] };
   let pozostalo = opcje.maksPobran ?? 50;
@@ -71,7 +71,8 @@ export async function synchronizuj(
             ostatniPrzetworzony = meta.permanentStorageDate;
             continue;
           }
-          if (pozostalo <= 0) {
+          // Limit pobrań albo czasu (funkcja Supabase ma twardy limit czasu): kończymy porządnie i zapisujemy stan.
+          if (pozostalo <= 0 || (opcje.terminMs !== undefined && Date.now() > opcje.terminMs)) {
             przerwano = true;
             break;
           }
@@ -86,7 +87,9 @@ export async function synchronizuj(
             ostatniPrzetworzony = meta.permanentStorageDate;
           } catch (e) {
             // Zatrzymujemy się na tej fakturze: następne uruchomienie zacznie od niej, nic nie zginie.
-            raport.bledy.push(`${meta.ksefNumber}: ${e instanceof Error ? e.message : String(e)}`);
+            const opis = `${meta.ksefNumber}: ${e instanceof Error ? e.message : String(e)}`;
+            console.error(opis);
+            raport.bledy.push(opis);
             przerwano = true;
             break;
           }
