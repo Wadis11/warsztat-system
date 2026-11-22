@@ -1,13 +1,13 @@
 // Zlecenie bez kosztorysu (np. naprawa prywatna): krótki formularz i od razu karta pracy.
 import { type FormEvent, useState } from "react";
-import type { Kontekst } from "../App.tsx";
+import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db } from "../supabase.ts";
 import { WyborKlienta } from "./WyborKlienta.tsx";
 import { WgrajKosztorys } from "./WgrajKosztorys.tsx";
 
 /** Nowe zlecenie: z kosztorysu PDF (właściciel) albo ręcznie. */
 export function NoweZlecenie(k: Kontekst & { tryb?: "kosztorys" | "reczne" }) {
-  const wlasciciel = k.rola === "wlasciciel";
+  const wlasciciel = widziKwoty(k.rola);
   const [tryb, ustawTryb] = useState<"kosztorys" | "reczne">(wlasciciel ? k.tryb ?? "kosztorys" : "reczne");
   return (
     <div className="kolumna">

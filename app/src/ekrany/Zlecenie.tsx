@@ -1,6 +1,6 @@
 // Zlecenie: dane auta, czynności, pracownicy; dla właściciela także kosztorysy, koszty z faktur i wynik.
 import { useCallback, useEffect, useState } from "react";
-import type { Kontekst } from "../App.tsx";
+import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
 import { WyborKlienta } from "./WyborKlienta.tsx";
 import { ROLE, type Pracownik } from "./Pracownicy.tsx";
@@ -26,7 +26,7 @@ const KATEGORIE: Record<string, string> = { czesc: "Część", lakier: "Lakier",
 const RODZAJE: Record<string, string> = { blacharka: "Blacharka", lakier: "Lakier", mechanika: "Mechanika", inne: "Inne" };
 
 export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId: string }) {
-  const wlasciciel = rola === "wlasciciel";
+  const wlasciciel = widziKwoty(rola);
   const [d, ustawD] = useState<Dane | null>(null);
   const [operacje, ustawOperacje] = useState<Operacja[]>([]);
   const [pracownicy, ustawPracownikow] = useState<Pracownik[]>([]);
@@ -294,7 +294,7 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
                 </tr>))}</tbody></table></div>)}
         </section>
 
-        <div className="przyciski"><button className="przycisk drugi" style={{ color: "var(--zle)" }} onClick={usunZlecenie}>Usuń zlecenie</button></div>
+        {rola === "wlasciciel" && <div className="przyciski"><button className="przycisk drugi" style={{ color: "var(--zle)" }} onClick={usunZlecenie}>Usuń zlecenie</button></div>}
       </>}
     </div>
   );

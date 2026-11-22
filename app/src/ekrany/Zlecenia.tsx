@@ -1,6 +1,6 @@
 // Lista zleceń. Właściciel widzi przychód i koszty przypisane z faktur; pracownik tylko dane auta i status.
 import { useEffect, useState } from "react";
-import type { Kontekst } from "../App.tsx";
+import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
 import { type Klient, SEGMENTY } from "./WyborKlienta.tsx";
 
@@ -17,7 +17,7 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
   const [szukaj, ustawSzukaj] = useState("");
   const [klienci, ustawKlientow] = useState<Klient[]>([]);
   const [filtr, ustawFiltr] = useState({ segment: "", klient: "", status: "otwarte" });
-  const wlasciciel = rola === "wlasciciel";
+  const wlasciciel = widziKwoty(rola);
 
   async function wczytaj() {
     const { data } = wlasciciel

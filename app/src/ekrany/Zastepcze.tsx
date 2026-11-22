@@ -343,7 +343,7 @@ export function NoweWypozyczenie({ rola, przejdz, autoId, zlecenieId, od, wypozy
       {f.rodzaj === "najem" && <section className="karta"><div className="tytul"><h2>Warunki najmu</h2></div><div className="srodek siatka">
         {t("stawka_netto", "Stawka netto za dobę (zł)", { typ: "number" })}{t("kaucja", "Kaucja (zł)", { typ: "number" })}
         <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><input type="checkbox" style={{ minHeight: 0 }} checked={f.cesja} onChange={(e) => ustawF({ ...f, cesja: e.target.checked })} /> rozliczenie z ubezpieczycielem sprawcy (cesja)</label>
-        {rola === "wlasciciel" && f.stawka_netto && doby ? <div className="cichy" style={{ alignSelf: "center" }}>{doby} dób × {zl(f.stawka_netto)} = {zl(doby * f.stawka_netto)} netto</div> : null}
+        {f.stawka_netto && doby ? <div className="cichy" style={{ alignSelf: "center" }}>{doby} dób × {zl(f.stawka_netto)} = {zl(doby * f.stawka_netto)} netto</div> : null}
       </div></section>}
 
       <section className="karta"><div className="tytul"><h2>Stan auta</h2></div><div className="srodek siatka">

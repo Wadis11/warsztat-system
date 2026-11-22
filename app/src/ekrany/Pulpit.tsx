@@ -1,6 +1,6 @@
 // Pulpit: skróty do zakładek, auta na warsztacie (z podziałem na pracowników) i tydzień umówionych przyjęć.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Kontekst, Widok } from "../App.tsx";
+import { type Kontekst, type Widok, widziKwoty } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
 
 interface Zl {
@@ -19,6 +19,7 @@ const auto = (z: Zl) => [z.marka, z.model].filter(Boolean).join(" ");
 
 export function Pulpit({ rola, przejdz }: Kontekst) {
   const wlasciciel = rola === "wlasciciel";
+  const kwoty = widziKwoty(rola);
   const [zlecenia, ustawZlecenia] = useState<Zl[] | null>(null);
   const [przydzial, ustawPrzydzial] = useState<{ zlecenie_id: string; pracownik_id: string }[]>([]);
   const [pracownicy, ustawPracownikow] = useState<{ id: string; imie: string; aktywny: boolean }[]>([]);
@@ -45,7 +46,7 @@ export function Pulpit({ rola, przejdz }: Kontekst) {
     ustawPracownikow((p.data ?? []) as { id: string; imie: string; aktywny: boolean }[]);
     ustawWypozyczenia((w.data ?? []) as unknown as Wyp[]);
     ustawFlote(a.count ?? 0); ustawTerminyFloty(t.count ?? 0);
-    if (wlasciciel) {
+    if (kwoty) {
       const [k, po, tyd, l] = await Promise.all([
         db.from("kolejka_pozycji").select("id", { count: "exact", head: true }),
         db.from("platnosci").select("id", { count: "exact", head: true }).eq("status", "do_zaplaty").lt("dni_do_terminu", 0),
@@ -56,7 +57,7 @@ export function Pulpit({ rola, przejdz }: Kontekst) {
       ustawLiczniki({ kolejka: k.count ?? 0, poTerminie: po.count ?? 0, doTygodnia: tydz.length,
         sumaTydzien: tydz.reduce((s, x) => s + Number(x.do_zaplaty), 0), lakiery: l.count ?? 0 });
     }
-  }, [wlasciciel]);
+  }, [kwoty]);
   useEffect(() => { wczytaj(); }, [wczytaj]);
 
   const wSerwisie = (zlecenia ?? []).filter((z) => W_SERWISIE.includes(z.status));
@@ -98,9 +99,9 @@ export function Pulpit({ rola, przejdz }: Kontekst) {
         {kafel("Auta na warsztacie", wSerwisie.length, `${wSerwisie.filter((z) => z.status === "gotowe").length} gotowych do wydania`, { ekran: "zlecenia" })}
         {kafel("Umówione", (zlecenia ?? []).filter((z) => z.status === "umowione").length, "czekają na przyjęcie", { ekran: "zlecenia" })}
         {kafel("Auta zastępcze", `${wydaneTeraz.length} / ${flota}`, terminyFloty ? `${terminyFloty} terminów w 30 dni` : "wydane / wszystkie", { ekran: "zastepcze" }, terminyFloty > 0)}
-        {wlasciciel && liczniki && <>
-          {kafel("Do zapłaty w 7 dni", zl(liczniki.sumaTydzien), liczniki.poTerminie ? `${liczniki.poTerminie} faktur po terminie` : `${liczniki.doTygodnia} faktur`, { ekran: "platnosci" }, liczniki.poTerminie > 0)}
-          {kafel("Do sprawdzenia", liczniki.kolejka, "pozycje z faktur", { ekran: "kolejka" }, liczniki.kolejka > 0)}
+        {kwoty && liczniki && <>
+          {wlasciciel && kafel("Do zapłaty w 7 dni", zl(liczniki.sumaTydzien), liczniki.poTerminie ? `${liczniki.poTerminie} faktur po terminie` : `${liczniki.doTygodnia} faktur`, { ekran: "platnosci" }, liczniki.poTerminie > 0)}
+          {wlasciciel && kafel("Do sprawdzenia", liczniki.kolejka, "pozycje z faktur", { ekran: "kolejka" }, liczniki.kolejka > 0)}
           {kafel("Lakiery", liczniki.lakiery, "do przypisania do zleceń", { ekran: "lakiery" }, liczniki.lakiery > 0)}
           {kafel("Materiał", "Ceny", "porównanie dostawców", { ekran: "material" })}
           {kafel("Pracownicy", pracownicy.filter((p) => p.aktywny).length, "wyniki i RBH", { ekran: "pracownicy" })}
@@ -162,7 +163,7 @@ export function Pulpit({ rola, przejdz }: Kontekst) {
             <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Bez przypisanego pracownika</strong><span className="licznik" style={{ background: naPracownika.bez.length ? "var(--zle)" : undefined }}>{naPracownika.bez.length}</span></div>
             {naPracownika.bez.slice(0, 12).map((z) => <button key={z.id} className="link" style={{ display: "block", fontSize: 13, marginTop: 4 }} onClick={() => przejdz({ ekran: "zlecenie", zlecenieId: z.id })}>
               {z.nr_rej} · {auto(z)}</button>)}
-            {pracownicy.length === 0 && wlasciciel && <p className="cichy" style={{ fontSize: 12 }}>Dodaj pracowników w zakładce Pracownicy, potem przypisuj ich w zleceniu.</p>}
+            {pracownicy.length === 0 && kwoty && <p className="cichy" style={{ fontSize: 12 }}>Dodaj pracowników w zakładce Pracownicy, potem przypisuj ich w zleceniu.</p>}
           </div>
         </div>
       </section>

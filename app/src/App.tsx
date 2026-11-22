@@ -14,8 +14,11 @@ import { Material } from "./ekrany/Material.tsx";
 import { Lakiery } from "./ekrany/Lakiery.tsx";
 import { Pulpit } from "./ekrany/Pulpit.tsx";
 import { Zastepcze, AutoZastepcze, NoweWypozyczenie, Umowa } from "./ekrany/Zastepcze.tsx";
+import { ZmianaHasla } from "./ekrany/ZmianaHasla.tsx";
 
-export type Rola = "wlasciciel" | "pracownik";
+export type Rola = "wlasciciel" | "biuro" | "pracownik";
+/** Czy rola widzi kwoty (kosztorysy, koszty, rentowność). Płatności widzi tylko właściciel. */
+export const widziKwoty = (r: Rola) => r !== "pracownik";
 export type Widok =
   | { ekran: "pulpit" }
   | { ekran: "kolejka" }
@@ -23,6 +26,7 @@ export type Widok =
   | { ekran: "auto_zastepcze"; autoId: string }
   | { ekran: "wypozyczenie"; autoId?: string; zlecenieId?: string; od?: string; wypozyczenieId?: string }
   | { ekran: "umowa"; wypozyczenieId: string }
+  | { ekran: "haslo" }
   | { ekran: "zlecenia" }
   | { ekran: "nowe" }
   | { ekran: "kosztorys" }
@@ -87,8 +91,8 @@ export function App() {
     );
   }
   // Drugi składnik: obowiązkowy dla właściciela; dla pracownika, jeśli go skonfigurował
-  if (poziom.obecny !== "aal2" && (rola === "wlasciciel" || poziom.wymagany === "aal2")) {
-    return <DrugiSkladnik obowiazkowy={rola === "wlasciciel"} gotowe={odswiezPoziom} />;
+  if (poziom.obecny !== "aal2" && (widziKwoty(rola) || poziom.wymagany === "aal2")) {
+    return <DrugiSkladnik obowiazkowy={widziKwoty(rola)} gotowe={odswiezPoziom} />;
   }
 
   const k: Kontekst = { rola, przejdz: ustawWidok };
@@ -109,11 +113,12 @@ export function App() {
         {pozycja("nowe", "Nowe zlecenie")}
         {pozycja("zastepcze", "Auta zastępcze")}
         {rola === "wlasciciel" && pozycja("platnosci", "Płatności", (wTerminie ?? 0) + (wKolejce ?? 0))}
-        {rola === "wlasciciel" && pozycja("material", "Materiał")}
-        {rola === "wlasciciel" && pozycja("lakiery", "Lakiery")}
-        {rola === "wlasciciel" && pozycja("pracownicy", "Pracownicy")}
+        {widziKwoty(rola) && pozycja("material", "Materiał")}
+        {widziKwoty(rola) && pozycja("lakiery", "Lakiery")}
+        {widziKwoty(rola) && pozycja("pracownicy", "Pracownicy")}
         <div className="stopka">
           {sesja.user.email}<br />
+          <button style={{ padding: "8px 0", color: "#aeb6c2" }} onClick={() => ustawWidok({ ekran: "haslo" })}>Zmień hasło</button>
           <button style={{ padding: "8px 0", color: "#aeb6c2" }} onClick={() => db.auth.signOut()}>Wyloguj</button>
         </div>
       </nav>
@@ -128,6 +133,7 @@ export function App() {
         {widok.ekran === "zastepcze" && <Zastepcze {...k} />}
         {widok.ekran === "auto_zastepcze" && <AutoZastepcze key={widok.autoId} {...k} autoId={widok.autoId} />}
         {widok.ekran === "wypozyczenie" && <NoweWypozyczenie {...k} {...widok} />}
+        {widok.ekran === "haslo" && <ZmianaHasla {...k} />}
         {widok.ekran === "umowa" && <Umowa {...k} wypozyczenieId={widok.wypozyczenieId} />}
         {widok.ekran === "zlecenia" && <Zlecenia {...k} />}
         {widok.ekran === "nowe" && <NoweZlecenie {...k} />}
