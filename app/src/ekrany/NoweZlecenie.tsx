@@ -2,7 +2,7 @@
 import { type FormEvent, useState } from "react";
 import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db } from "../supabase.ts";
-import { WyborKlienta } from "./WyborKlienta.tsx";
+import { RODZAJE, RODZAJ_Z_SEGMENTU, WyborKlienta } from "./WyborKlienta.tsx";
 import { WgrajKosztorys } from "./WgrajKosztorys.tsx";
 
 /** Nowe zlecenie: z kosztorysu PDF (właściciel) albo ręcznie. */
@@ -27,6 +27,7 @@ function FormularzReczny({ przejdz }: Kontekst) {
   const [f, ustawF] = useState({ nr_rej: "", vin: "", marka: "", model: "", nr_szkody: "", zakres_prac: "" });
   const [klient, ustawKlienta] = useState("");
   const [termin, ustawTermin] = useState("");
+  const [rodzaj, ustawRodzaj] = useState("prywatne");
   const [zastepcze, ustawZastepcze] = useState(false);
   const [blad, ustawBlad] = useState<string | null>(null);
   const [trwa, ustawTrwa] = useState(false);
@@ -44,6 +45,7 @@ function FormularzReczny({ przejdz }: Kontekst) {
       nr_szkody: f.nr_szkody.trim() || null,
       zakres_prac: f.zakres_prac.trim() || null,
       klient_id: klient || null,
+      rodzaj,
       termin: termin ? new Date(termin).toISOString() : null,
       zastepcze_potrzebne: zastepcze,
       // Auto umówione na przyszły dzień czeka w kalendarzu; w dniu przyjęcia zmień status na „Przyjęte”
@@ -64,7 +66,9 @@ function FormularzReczny({ przejdz }: Kontekst) {
           <label>Marka<input {...pole("marka")} /></label>
           <label>Model<input {...pole("model")} /></label>
           <label>Nr szkody (jeśli jest)<input {...pole("nr_szkody")} /></label>
-          <WyborKlienta wartosc={klient} onChange={ustawKlienta} podpowiedzSegmentu="prywatny" />
+          <WyborKlienta wartosc={klient} onChange={(id, seg) => { ustawKlienta(id); if (seg && RODZAJ_Z_SEGMENTU[seg]) ustawRodzaj(RODZAJ_Z_SEGMENTU[seg]); }} podpowiedzSegmentu="prywatny" />
+          <label>Rodzaj zlecenia<select value={rodzaj} onChange={(e) => ustawRodzaj(e.target.value)}>
+            {Object.entries(RODZAJE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label>Termin przyjęcia (jeśli umawiasz)<input type="datetime-local" value={termin} onChange={(e) => ustawTermin(e.target.value)} /></label>
           <label style={{ flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "end" }}>
             <input type="checkbox" style={{ minHeight: 0 }} checked={zastepcze} onChange={(e) => ustawZastepcze(e.target.checked)} /> potrzebne auto zastępcze</label>

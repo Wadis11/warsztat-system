@@ -3,12 +3,19 @@ import { db } from "../supabase.ts";
 
 export interface Klient { id: string; nazwa: string; segment: string }
 export const SEGMENTY: Record<string, string> = {
-  ayvens: "Ayvens", ubezpieczyciel: "Ubezpieczyciel", prywatny: "Klient prywatny", pozostali: "Pozostali",
+  ayvens: "Ayvens", ubezpieczyciel: "Ubezpieczyciel", prywatny: "Klient prywatny", powiazany: "Firma powiązana", pozostali: "Pozostali",
+};
+/** Rodzaje zleceń — każdy ma osobną numerację NN/MM/RRRR. */
+export const RODZAJE: Record<string, string> = {
+  ayvens: "Ayvens", ubezpieczenie: "Ubezpieczalnia", prywatne: "Naprawy prywatne", powiazani: "Powiązani", inne: "Inne",
+};
+export const RODZAJ_Z_SEGMENTU: Record<string, string> = {
+  ayvens: "ayvens", ubezpieczyciel: "ubezpieczenie", prywatny: "prywatne", powiazany: "powiazani", pozostali: "inne",
 };
 
 /** Wybór klienta z listy albo dodanie nowego w miejscu. Zwraca id przez onChange. */
 export function WyborKlienta({ wartosc, onChange, podpowiedzSegmentu }: {
-  wartosc: string; onChange: (id: string) => void; podpowiedzSegmentu?: string;
+  wartosc: string; onChange: (id: string, segment?: string) => void; podpowiedzSegmentu?: string;
 }) {
   const [klienci, ustawKlientow] = useState<Klient[]>([]);
   const [nowy, ustawNowy] = useState(false);
@@ -26,7 +33,7 @@ export function WyborKlienta({ wartosc, onChange, podpowiedzSegmentu }: {
       // Podpowiedź: jedyny klient segmentu (np. Ayvens) wybierany od razu
       if (!wartosc && podpowiedzSegmentu) {
         const pasujacy = k.filter((x) => x.segment === podpowiedzSegmentu);
-        if (pasujacy.length === 1) onChange(pasujacy[0].id);
+        if (pasujacy.length === 1) onChange(pasujacy[0].id, pasujacy[0].segment);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -37,7 +44,7 @@ export function WyborKlienta({ wartosc, onChange, podpowiedzSegmentu }: {
     const { data, error } = await db.from("klienci").insert({ nazwa: nazwa.trim(), segment }).select("id").single();
     if (error) { ustawBlad(error.message); return; }
     await wczytaj();
-    onChange(data.id);
+    onChange(data.id, segment);
     ustawNowy(false);
     ustawNazwe("");
   }
@@ -61,7 +68,7 @@ export function WyborKlienta({ wartosc, onChange, podpowiedzSegmentu }: {
   }
   return (
     <label>Klient (płatnik)
-      <select value={wartosc} onChange={(e) => (e.target.value === "__nowy" ? ustawNowy(true) : onChange(e.target.value))}>
+      <select value={wartosc} onChange={(e) => (e.target.value === "__nowy" ? ustawNowy(true) : onChange(e.target.value, klienci.find((k) => k.id === e.target.value)?.segment))}>
         <option value="">— wybierz —</option>
         {klienci.map((k) => <option key={k.id} value={k.id}>{k.nazwa} ({SEGMENTY[k.segment]})</option>)}
         <option value="__nowy">+ Nowy klient…</option>

@@ -2,11 +2,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
-import { WyborKlienta } from "./WyborKlienta.tsx";
+import { RODZAJE as RODZAJE_ZLECEN, RODZAJ_Z_SEGMENTU, WyborKlienta } from "./WyborKlienta.tsx";
 import { ROLE, type Pracownik } from "./Pracownicy.tsx";
 
 interface Dane {
-  numer: string; nr_rej: string | null; vin: string | null; marka: string | null; model: string | null;
+  numer: string; rodzaj: string; numer_rodzaju: string; nr_rej: string | null; vin: string | null; marka: string | null; model: string | null;
   nr_szkody: string | null; zakres_prac: string | null; status: string; klient_id: string | null;
   data_przyjecia: string; data_wydania: string | null; termin: string | null; zastepcze_potrzebne: boolean;
 }
@@ -42,7 +42,7 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
 
   const wczytaj = useCallback(async () => {
     const [z, o, p, zp, wz] = await Promise.all([
-      db.from("zlecenia").select("numer, nr_rej, vin, marka, model, nr_szkody, zakres_prac, status, klient_id, data_przyjecia, data_wydania, termin, zastepcze_potrzebne").eq("id", zlecenieId).single(),
+      db.from("zlecenia").select("numer, rodzaj, numer_rodzaju, nr_rej, vin, marka, model, nr_szkody, zakres_prac, status, klient_id, data_przyjecia, data_wydania, termin, zastepcze_potrzebne").eq("id", zlecenieId).single(),
       db.from("zlecenia_operacje").select("id, kolejnosc, rodzaj, opis").eq("zlecenie_id", zlecenieId).order("kolejnosc"),
       db.from("pracownicy").select("id, imie, specjalizacja, aktywny").order("imie"),
       db.from("zlecenia_pracownicy").select("pracownik_id, rola").eq("zlecenie_id", zlecenieId),
@@ -82,12 +82,14 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
     <label>{etykieta}<input type={typ} value={String(d[k] ?? "")} onChange={(e) => ustawD({ ...d, [k]: e.target.value })} /></label>
   );
 
-  function zapiszDane() {
+  async function zapiszDane() {
+    const { data: przed } = await db.from("zlecenia").select("rodzaj").eq("id", zlecenieId).single();
+    if (przed && przed.rodzaj !== d!.rodzaj && !window.confirm(`Zmiana rodzaju na „${RODZAJE_ZLECEN[d!.rodzaj]}” nada nowy numer w tej numeracji, a ${d!.numer_rodzaju} przepadnie. Zmienić?`)) return;
     const n = (s: string | null) => (s && s.trim() ? s.trim() : null);
     return wykonaj(db.from("zlecenia").update({
       nr_rej: n(d!.nr_rej)?.toUpperCase() ?? null, vin: n(d!.vin)?.toUpperCase() ?? null, marka: n(d!.marka)?.toUpperCase() ?? null,
       model: n(d!.model), nr_szkody: n(d!.nr_szkody), zakres_prac: n(d!.zakres_prac), status: d!.status,
-      klient_id: d!.klient_id || null, data_przyjecia: d!.data_przyjecia,
+      klient_id: d!.klient_id || null, data_przyjecia: d!.data_przyjecia, rodzaj: d!.rodzaj,
       termin: d!.termin ? new Date(d!.termin).toISOString() : null, zastepcze_potrzebne: d!.zastepcze_potrzebne,
       data_wydania: d!.data_wydania || (d!.status === "wydane" ? new Date().toISOString().slice(0, 10) : null),
     }).eq("id", zlecenieId), "Zapisano dane zlecenia.");
@@ -135,7 +137,7 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
   return (
     <div className="kolumna">
       <div className="naglowek">
-        <div><h1>{d.numer}</h1><p className="podtytul">{[d.marka, d.model].filter(Boolean).join(" ")} · {d.nr_rej}</p></div>
+        <div><h1>{RODZAJE_ZLECEN[d.rodzaj]} {d.numer_rodzaju}</h1><p className="podtytul">{[d.marka, d.model].filter(Boolean).join(" ")} · {d.nr_rej} · nr wewnętrzny (mieszalnik, faktury): <strong>{d.numer}</strong></p></div>
         <div className="przyciski">
           <button className="przycisk drugi" onClick={() => przejdz({ ekran: "karta", zlecenieId })}>Karta pracy</button>
           <button className="przycisk drugi" onClick={() => przejdz({ ekran: "zlecenia" })}>← Zlecenia</button>
@@ -160,7 +162,9 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
           <div className="siatka">
             {pole("nr_rej", "Rejestracja")}{pole("vin", "VIN")}{pole("marka", "Marka")}{pole("model", "Model")}
             {pole("nr_szkody", "Nr szkody")}
-            <WyborKlienta wartosc={d.klient_id ?? ""} onChange={(id) => ustawD({ ...d, klient_id: id })} />
+            <WyborKlienta wartosc={d.klient_id ?? ""} onChange={(id, seg) => ustawD({ ...d, klient_id: id, rodzaj: seg && RODZAJ_Z_SEGMENTU[seg] ? RODZAJ_Z_SEGMENTU[seg] : d.rodzaj })} />
+            <label>Rodzaj zlecenia<select value={d.rodzaj} onChange={(e) => ustawD({ ...d, rodzaj: e.target.value })}>
+              {Object.entries(RODZAJE_ZLECEN).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
             <label>Status
               <select value={d.status} onChange={(e) => ustawD({ ...d, status: e.target.value })}>
                 {Object.entries(STATUSY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

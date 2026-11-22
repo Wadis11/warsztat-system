@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react";
 import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
-import { type Klient, SEGMENTY } from "./WyborKlienta.tsx";
+import { type Klient, RODZAJE, SEGMENTY } from "./WyborKlienta.tsx";
 
 interface Wiersz {
-  id: string; numer: string; nr_rej: string | null; marka: string | null; model: string | null; status: string;
+  id: string; numer: string; rodzaj: string; numer_rodzaju: string; nr_rej: string | null; marka: string | null; model: string | null; status: string;
   data_przyjecia: string; klient_id?: string | null; klient?: string | null; segment?: string | null; wersja_kosztorysu?: string | null;
   przychod_kosztorys?: number | null; przychod_faktura?: number | null; rbh?: number | null;
   koszt_czesci?: number | null; koszt_lakier_materialy?: number | null; pozycji_kosztowych?: number | null;
@@ -17,12 +17,14 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
   const [szukaj, ustawSzukaj] = useState("");
   const [klienci, ustawKlientow] = useState<Klient[]>([]);
   const [filtr, ustawFiltr] = useState({ segment: "", klient: "", status: "otwarte" });
+  const [zakladka, ustawZakladke] = useState<string>(() => { try { return localStorage.getItem("zlecenia_zakladka") ?? "ayvens"; } catch { return "ayvens"; } });
+  const wybierz = (z: string) => { ustawZakladke(z); try { localStorage.setItem("zlecenia_zakladka", z); } catch { /* bez pamięci */ } };
   const wlasciciel = widziKwoty(rola);
 
   async function wczytaj() {
     const { data } = wlasciciel
       ? await db.from("zlecenia_wyniki").select("*").order("data_przyjecia", { ascending: false }).limit(300)
-      : await db.from("zlecenia").select("id, numer, nr_rej, marka, model, status, data_przyjecia").order("data_przyjecia", { ascending: false }).limit(300);
+      : await db.from("zlecenia").select("id, numer, rodzaj, numer_rodzaju, nr_rej, marka, model, status, data_przyjecia").order("data_przyjecia", { ascending: false }).limit(300);
     ustawWiersze((data ?? []) as Wiersz[]);
     if (wlasciciel) {
       const k = await db.from("klienci").select("id, nazwa, segment").order("nazwa");
@@ -46,9 +48,11 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
 
   const q = szukaj.toUpperCase().replace(/\s/g, "");
   const OTWARTE = ["umowione", "przyjete", "w_naprawie", "gotowe"];
-  const widoczne = (wiersze ?? []).filter((w) =>
+  const wRodzaju = (wiersze ?? []).filter((w) => !zakladka || w.rodzaj === zakladka);
+  const ile = (r: string) => (wiersze ?? []).filter((w) => w.rodzaj === r && OTWARTE.includes(w.status)).length;
+  const widoczne = wRodzaju.filter((w) =>
     (!filtr.status || (filtr.status === "otwarte" ? OTWARTE.includes(w.status) : w.status === filtr.status)) &&
-    (!filtr.segment || w.segment === filtr.segment) && (!filtr.klient || w.klient_id === filtr.klient)).filter((w) => !q || `${w.numer}${w.nr_rej}${w.marka}${w.model}${w.klient ?? ""}`.toUpperCase().replace(/\s/g, "").includes(q));
+    (!filtr.segment || w.segment === filtr.segment) && (!filtr.klient || w.klient_id === filtr.klient)).filter((w) => !q || `${w.numer}${w.numer_rodzaju}${w.nr_rej}${w.marka}${w.model}${w.klient ?? ""}`.toUpperCase().replace(/\s/g, "").includes(q));
 
   return (
     <div className="kolumna">
@@ -56,18 +60,21 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
         <div><h1>Zlecenia</h1>
           <p className="podtytul">{wlasciciel ? "Marża przed robocizną = przychód − części − lakier i materiały przypisane z faktur." : "Aktualne zlecenia warsztatu."}</p></div>
       </div>
+      <div className="przyciski" role="tablist" aria-label="Rodzaj zleceń">
+        {Object.entries(RODZAJE).filter(([k]) => k !== "inne" || ile("inne") > 0 || (wiersze ?? []).some((w) => w.rodzaj === "inne")).map(([k, v]) =>
+          <button key={k} role="tab" aria-selected={zakladka === k} className={`przycisk ${zakladka === k ? "" : "drugi"}`} onClick={() => wybierz(k)}>
+            {v}{ile(k) ? ` (${ile(k)})` : ""}</button>)}
+        <button role="tab" aria-selected={zakladka === ""} className={`przycisk ${zakladka === "" ? "" : "drugi"}`} onClick={() => wybierz("")}>Wszystkie</button>
+      </div>
       <div className="przyciski" style={{ alignItems: "flex-end" }}>
         <label>Szukaj<input type="search" placeholder="numer, rejestracja, marka" value={szukaj} onChange={(e) => ustawSzukaj(e.target.value)} /></label>
         <label>Status<select value={filtr.status} onChange={(e) => ustawFiltr({ ...filtr, status: e.target.value })}>
           <option value="otwarte">Otwarte</option><option value="">Wszystkie</option>
           {Object.entries(STATUSY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         {wlasciciel && <>
-          <label>Rodzaj klienta<select value={filtr.segment} onChange={(e) => ustawFiltr({ ...filtr, segment: e.target.value, klient: "" })}>
-            <option value="">Wszyscy</option>
-            {Object.entries(SEGMENTY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label>Klient<select value={filtr.klient} onChange={(e) => ustawFiltr({ ...filtr, klient: e.target.value })}>
             <option value="">Wszyscy</option>
-            {klienci.filter((k) => !filtr.segment || k.segment === filtr.segment).map((k) => <option key={k.id} value={k.id}>{k.nazwa}</option>)}</select></label>
+            {klienci.filter((k) => !zakladka || (wiersze ?? []).some((w) => w.klient_id === k.id && w.rodzaj === zakladka)).map((k) => <option key={k.id} value={k.id}>{k.nazwa}</option>)}</select></label>
         </>}
         <span className="cichy" style={{ alignSelf: "center" }}>{widoczne.length} zleceń{wlasciciel && widoczne.length > 0 && (() => {
           const p = widoczne.reduce((a, w) => a + (w.przychod_faktura ?? w.przychod_kosztorys ?? 0), 0);
@@ -88,7 +95,8 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
               const marza = przychod === null ? null : przychod - (w.koszt_czesci ?? 0) - (w.koszt_lakier_materialy ?? 0);
               return (
                 <tr key={w.id}>
-                  <td><button className="link" onClick={() => przejdz({ ekran: "zlecenie", zlecenieId: w.id })}><strong>{w.numer}</strong></button><div className="cichy">{[w.marka, w.model].filter(Boolean).join(" ")} · {w.nr_rej} · {w.data_przyjecia}</div></td>
+                  <td><button className="link" onClick={() => przejdz({ ekran: "zlecenie", zlecenieId: w.id })}><strong>{w.numer_rodzaju}</strong></button>
+                    <span className="cichy" style={{ fontSize: 12 }}> · wewn. {w.numer}{!zakladka ? ` · ${RODZAJE[w.rodzaj]}` : ""}</span><div className="cichy">{[w.marka, w.model].filter(Boolean).join(" ")} · {w.nr_rej} · {w.data_przyjecia}</div></td>
                   <td><select aria-label={`Status ${w.numer}`} value={w.status} onChange={(e) => zmienStatus(w.id, e.target.value)}>
                     {Object.entries(STATUSY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select></td>
