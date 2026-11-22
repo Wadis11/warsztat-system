@@ -10,6 +10,7 @@ import { KartaPracy } from "./ekrany/KartaPracy.tsx";
 import { Zlecenie } from "./ekrany/Zlecenie.tsx";
 import { Pracownicy } from "./ekrany/Pracownicy.tsx";
 import { Platnosci } from "./ekrany/Platnosci.tsx";
+import { Material } from "./ekrany/Material.tsx";
 
 export type Rola = "wlasciciel" | "pracownik";
 export type Widok =
@@ -19,6 +20,7 @@ export type Widok =
   | { ekran: "kosztorys" }
   | { ekran: "pracownicy" }
   | { ekran: "platnosci" }
+  | { ekran: "material" }
   | { ekran: "zlecenie"; zlecenieId: string }
   | { ekran: "karta"; zlecenieId: string };
 
@@ -97,6 +99,7 @@ export function App() {
         {pozycja("zlecenia", "Zlecenia")}
         {pozycja("nowe", "Nowe zlecenie")}
         {rola === "wlasciciel" && pozycja("platnosci", "Płatności", wTerminie)}
+        {rola === "wlasciciel" && pozycja("material", "Materiał")}
         {rola === "wlasciciel" && pozycja("pracownicy", "Pracownicy")}
         <div className="stopka">
           {sesja.user.email}<br />
@@ -109,6 +112,7 @@ export function App() {
         {widok.ekran === "nowe" && <NoweZlecenie {...k} />}
         {widok.ekran === "kosztorys" && <NoweZlecenie {...k} tryb="kosztorys" />}
         {widok.ekran === "platnosci" && <Platnosci {...k} />}
+        {widok.ekran === "material" && <Material {...k} />}
         {widok.ekran === "pracownicy" && <Pracownicy {...k} />}
         {widok.ekran === "zlecenie" && <Zlecenie key={widok.zlecenieId} {...k} zlecenieId={widok.zlecenieId} />}
         {widok.ekran === "karta" && <KartaPracy {...k} zlecenieId={widok.zlecenieId} />}

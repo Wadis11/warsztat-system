@@ -20,6 +20,8 @@ Specyfikacja: dokument „System zarządzania warsztatem — Moduł 1: Rentowno�
 | `supabase/functions/ksef-sync/` | Funkcja uruchamiana co godzinę: pobiera nowe faktury z KSeF (najpierw ostatnie 60 dni, potem zaległości) |
 | `supabase/functions/biala-lista/` | Sprawdzanie rachunków dostawców na białej liście VAT dla faktur do zapłaty |
 | `app/` | Aplikacja webowa (React + Vite): logowanie z 2FA, kolejka faktur, zlecenia, wgrywanie kosztorysów, karta pracy |
+| `app/src/faktury/` | Odczyt pozycji z faktur PDF sklepów internetowych (materiały pomocnicze) |
+| `app/src/przelewy/` | Paczka przelewów MultiCash PLI dla BNP Paribas |
 | `app/src/kosztorys/` | Parser kosztorysów w TypeScript (działa w przeglądarce, PDF nie opuszcza bazy firmy) |
 | `netlify.toml` | Konfiguracja hostingu aplikacji |
 | `tools/porownaj_parser.ts` | Porównanie parsera TS z prototypem na lokalnych PDF-ach |
