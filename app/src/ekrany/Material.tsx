@@ -12,7 +12,7 @@ interface WierszPorownania {
 interface Zakup {
   pozycja_id: string; faktura: string; data: string; nip: string; dostawca: string; indeks: string | null; indeks_norm: string;
   nazwa: string; ilosc: number | null; jednostka: string | null; cena_netto: number | null; wartosc: number;
-  material_id: string | null; mnoznik: number | null; cena_katalogowa: number | null; rodzaj: string; pominiety: boolean;
+  material_id: string | null; mnoznik: number | null; cena_katalogowa: number | null; rodzaj: string; pominiety: boolean; lakier: boolean;
 }
 interface Produkt {
   id: string; kategoria: string; nazwa: string; wariant: string | null; jednostka: string | null; uwagi: string | null;
@@ -63,7 +63,7 @@ export function Material(k: Kontekst) {
   const doPrzypisania = useMemo(() => {
     const m = new Map<string, { nip: string; dostawca: string; indeks_norm: string; indeks: string | null; nazwa: string; jednostka: string | null; n: number; suma: number; cena: number | null; data: string }>();
     for (const z of zakupy) {
-      if (z.material_id || z.pominiety || z.rodzaj !== "glowny" || !z.indeks_norm) continue;
+      if (z.material_id || z.pominiety || z.lakier || z.rodzaj !== "glowny" || !z.indeks_norm) continue;
       const kl = `${z.nip}|${z.indeks_norm}`;
       const w = m.get(kl) ?? { nip: z.nip, dostawca: z.dostawca, indeks_norm: z.indeks_norm, indeks: z.indeks, nazwa: z.nazwa, jednostka: z.jednostka, n: 0, suma: 0, cena: z.cena_netto, data: z.data };
       w.n++; w.suma += Number(z.wartosc); m.set(kl, w);
@@ -240,9 +240,9 @@ function DoPrzypisania({ lista, produkty, zakupy, odswiez }: {
   const [blad, ustawBlad] = useState<string | null>(null);
   const posortowane = [...produkty].sort((a, b) => a.kategoria.localeCompare(b.kategoria, "pl") || opis(a).localeCompare(opis(b), "pl"));
 
-  async function zapisz(w: typeof lista[number], materialId: string | null, mnoznik = 1, pominiety = false) {
+  async function zapisz(w: typeof lista[number], materialId: string | null, mnoznik = 1, pominiety = false, lakier = false) {
     const { error } = await db.from("materialy_kody").upsert({
-      material_id: materialId, nip_dostawcy: w.nip, indeks_norm: w.indeks_norm, nazwa_dostawcy: w.nazwa, mnoznik, pominiety,
+      material_id: materialId, nip_dostawcy: w.nip, indeks_norm: w.indeks_norm, nazwa_dostawcy: w.nazwa, mnoznik, pominiety, lakier,
     }, { onConflict: "nip_dostawcy,indeks_norm" });
     ustawBlad(error?.message ?? null); if (!error) await odswiez();
   }
@@ -256,7 +256,7 @@ function DoPrzypisania({ lista, produkty, zakupy, odswiez }: {
   return (
     <section className="karta">
       <div className="srodek cichy">Produkty z faktur, których jeszcze nie ma w katalogu — od największych wydatków. Przypisz do pozycji z arkusza, dodaj jako nowy produkt
-        albo pomiń (np. lakier mieszany na kolor). Mnożnik: ile jednostek z katalogu jest w jednej jednostce z faktury (arkusz z paczki 50 szt. = 0,02).</div>
+        „To lakier”, gdy to lakier dorabiany pod auto (przejdzie do zakładki Lakiery), albo pomiń. Mnożnik: ile jednostek z katalogu jest w jednej jednostce z faktury (arkusz z paczki 50 szt. = 0,02).</div>
       {blad && <div className="srodek"><div className="blad">{blad}</div></div>}
       <div className="przewijanie"><table style={{ minWidth: 960 }}>
         <thead><tr><th>Produkt dostawcy</th><th className="liczba">Zakupy</th><th className="liczba">Ostatnia cena</th><th>Przypisz do</th><th></th></tr></thead>
@@ -291,6 +291,7 @@ function DoPrzypisania({ lista, produkty, zakupy, odswiez }: {
               <td><div className="przyciski">
                 <button className="przycisk" disabled={!wyb.material} onClick={() => zapisz(w, wyb.material, mn)}>Przypisz</button>
                 <button className="przycisk drugi" onClick={() => nowyProdukt(w)}>Nowy produkt</button>
+                <button className="przycisk drugi" title="Lakier dorabiany pod auto — trafi do zakładki Lakiery" onClick={() => zapisz(w, null, 1, false, true)}>To lakier</button>
                 <button className="przycisk drugi" onClick={() => zapisz(w, null, 1, true)}>Pomiń</button>
               </div></td>
             </tr>);

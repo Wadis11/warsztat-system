@@ -43,6 +43,23 @@ select pg_temp.sprawdz((select count(*) from materialy_zakupy where material_id 
 select pg_temp.sprawdz((select wydano_12m from materialy_porownanie
   where material_id = '40000000-0000-0000-0000-000000000001' and nip = '1110000001') = 80, 'wydatki z 12 miesięcy');
 
+-- Lakiery na auto
+insert into zlecenia (id, nr_rej, data_przyjecia) values ('42000000-0000-0000-0000-000000000001', 'KR 1234A', '2026-11-10');
+select zapisz_fakture_ksef(jsonb_build_object(
+  'nr_ksef', 'L-1', 'kierunek', 'zakup', 'numer', 'FV/L/1', 'nip_kontrahenta', '1110000001',
+  'data_wystawienia', '2026-11-14', 'netto', 400, 'vat', 92, 'brutto', 492, 'xml', '<Faktura/>',
+  'pozycje', jsonb_build_array(
+    jsonb_build_object('lp', 1, 'nazwa', 'LAKIER BAZA I/METALIC', 'indeks', 'LB-1', 'ilosc', 0.5, 'jednostka', 'L', 'netto', 150, 'wartosc', 150, 'kategoria', 'lakier', 'sposob', 'brak', 'pewnosc', 0.6),
+    jsonb_build_object('lp', 2, 'nazwa', 'LES BCOAT WB 25 Lakier bazowy 1L', 'indeks', 'WB25', 'ilosc', 1, 'jednostka', 'szt.', 'netto', 200, 'wartosc', 200, 'kategoria', 'lakier', 'sposob', 'brak', 'pewnosc', 0.6),
+    jsonb_build_object('lp', 3, 'nazwa', 'UTWARDZACZ DO LAKIERU', 'indeks', 'UT', 'ilosc', 1, 'jednostka', 'L', 'netto', 50, 'wartosc', 50, 'kategoria', 'lakier', 'sposob', 'brak', 'pewnosc', 0.6))));
+select pg_temp.sprawdz((select count(*) from lakiery_zakupy where faktura = 'FV/L/1') = 1, 'lakier na litry rozpoznany, baza do mieszalnika i utwardzacz nie');
+select pg_temp.sprawdz((select status from lakiery_zakupy where faktura = 'FV/L/1') = 'do_przypisania', 'lakier czeka na przypisanie');
+select pg_temp.sprawdz((select count(*) from materialy_zakupy where faktura = 'FV/L/1' and lakier) = 1, 'lakier nie trafia do „Do przypisania” w Materiale');
+insert into materialy_kody (nip_dostawcy, indeks_norm, lakier) values ('1110000001', norm_indeks('WB25'), true);
+select pg_temp.sprawdz((select count(*) from lakiery_zakupy where faktura = 'FV/L/1') = 2, 'produkt oznaczony ręcznie jako lakier');
+update pozycje_faktur set zlecenie_id = '42000000-0000-0000-0000-000000000001', zatwierdzono = now() where nazwa = 'LAKIER BAZA I/METALIC';
+select pg_temp.sprawdz((select nr_rej from lakiery_zakupy where nazwa = 'LAKIER BAZA I/METALIC') = 'KR 1234A', 'lakier przypisany do zlecenia');
+
 -- Pracownik nie widzi materiałów ani cen
 insert into auth.users (id) values ('00000000-0000-0000-0000-00000000000b'), ('00000000-0000-0000-0000-00000000000a');
 insert into profile (id, imie, rola) values ('00000000-0000-0000-0000-00000000000b', 'Pracownik', 'pracownik'),
