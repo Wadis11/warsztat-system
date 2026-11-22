@@ -6,19 +6,15 @@ import { RODZAJE } from "./WyborKlienta.tsx";
 import { Legenda, opisElementu, Rysunek, wczytajZaznaczenia, type Zaznaczenia } from "./SchematAuta.tsx";
 
 interface Zlecenie { numer: string; rodzaj: string; numer_rodzaju: string; nr_rej: string | null; vin: string | null; marka: string | null; model: string | null;
-  zakres_prac: string | null; data_przyjecia: string; nr_szkody: string | null }
-interface Operacja { kolejnosc: number; rodzaj: string; opis: string }
+  zakres_prac: string | null; data_przyjecia: string; nr_szkody: string | null; kod_lakieru: string | null }
 
 export function KartaPracy({ zlecenieId, przejdz }: Kontekst & { zlecenieId: string }) {
   const [z, ustawZ] = useState<Zlecenie | null>(null);
-  const [operacje, ustawOperacje] = useState<Operacja[]>([]);
   const [elementy, ustawElementy] = useState<Zaznaczenia>({});
 
   useEffect(() => {
-    db.from("zlecenia").select("numer, rodzaj, numer_rodzaju, nr_rej, vin, marka, model, zakres_prac, data_przyjecia, nr_szkody").eq("id", zlecenieId).single()
+    db.from("zlecenia").select("numer, rodzaj, numer_rodzaju, nr_rej, vin, marka, model, zakres_prac, data_przyjecia, nr_szkody, kod_lakieru").eq("id", zlecenieId).single()
       .then(({ data }) => ustawZ(data as Zlecenie));
-    db.from("zlecenia_operacje").select("kolejnosc, rodzaj, opis").eq("zlecenie_id", zlecenieId).order("kolejnosc")
-      .then(({ data }) => ustawOperacje((data ?? []) as Operacja[]));
     wczytajZaznaczenia(zlecenieId).then(ustawElementy);
   }, [zlecenieId]);
 
@@ -27,7 +23,6 @@ export function KartaPracy({ zlecenieId, przejdz }: Kontekst & { zlecenieId: str
   const linie = [
     ...zRysunku,
     ...(z.zakres_prac ?? "").split("\n").map((s) => s.trim()).filter(Boolean),
-    ...operacje.map((o) => o.opis),
   ];
 
   return (
@@ -39,7 +34,10 @@ export function KartaPracy({ zlecenieId, przejdz }: Kontekst & { zlecenieId: str
       <section className="karta"><div className="srodek" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="cichy">KARTA PRACY · przyjęte {z.data_przyjecia}</div>
         <h1>{RODZAJE[z.rodzaj]} {z.numer_rodzaju}</h1>
-        <div style={{ border: "2px solid #000", borderRadius: 8, padding: "6px 12px", alignSelf: "flex-start", fontSize: 18 }}>Nr do mieszalnika: <strong>{z.numer}</strong></div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ border: "2px solid #000", borderRadius: 8, padding: "6px 12px", fontSize: 18 }}>Nr do mieszalnika: <strong>{z.numer}</strong></div>
+          <div style={{ border: "2px solid #000", borderRadius: 8, padding: "6px 12px", fontSize: 18 }}>Numer lakieru: <strong>{z.kod_lakieru ?? "______________"}</strong></div>
+        </div>
         <div className="duzy">{[z.marka, z.model].filter(Boolean).join(" ")} · {z.nr_rej}</div>
         <div className="cichy">VIN: {z.vin ?? "—"}{z.nr_szkody ? ` · szkoda ${z.nr_szkody}` : ""}</div>
         {zRysunku.length > 0 && <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>

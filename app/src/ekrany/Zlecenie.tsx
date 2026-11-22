@@ -9,10 +9,9 @@ import { SchematAuta } from "./SchematAuta.tsx";
 interface Dane {
   numer: string; rodzaj: string; numer_rodzaju: string; nr_rej: string | null; vin: string | null; marka: string | null; model: string | null;
   nr_szkody: string | null; zakres_prac: string | null; status: string; klient_id: string | null;
-  data_przyjecia: string; data_wydania: string | null; termin: string | null; zastepcze_potrzebne: boolean;
+  data_przyjecia: string; data_wydania: string | null; termin: string | null; zastepcze_potrzebne: boolean; kod_lakieru: string | null;
 }
 interface WypZl { id: string; numer: string; wydanie: string; planowany_zwrot: string | null; zwrot: string | null; najemca_nazwa: string; auta_zastepcze: { nr_rej: string; marka: string | null; model: string | null } | null }
-interface Operacja { id?: string; kolejnosc: number; rodzaj: string; opis: string }
 interface Przypisanie { pracownik_id: string; rola: string }
 interface Kosztorys { id: string; wersja: string; zrodlo: string; autor: string | null; data: string | null; netto: number;
   rbh_blach: number | null; rbh_lak: number | null; plik: string | null; utworzono: string }
@@ -24,12 +23,10 @@ interface Wynik { przychod_kosztorys: number | null; przychod_faktura: number | 
 const STATUSY: Record<string, string> = { umowione: "Umówione", przyjete: "Przyjęte", w_naprawie: "W naprawie", gotowe: "Gotowe", wydane: "Wydane", anulowane: "Anulowane" };
 const WERSJE: Record<string, string> = { zlozony: "Złożony", zaakceptowany: "Zaakceptowany", wycena_ubezpieczyciela: "Wycena ubezpieczyciela" };
 const KATEGORIE: Record<string, string> = { czesc: "Część", lakier: "Lakier", material: "Materiał", koszt_ogolny: "Koszt ogólny", koszt_sprawy: "Koszt sprawy", nieustalona: "Nieustalona" };
-const RODZAJE: Record<string, string> = { blacharka: "Blacharka", lakier: "Lakier", mechanika: "Mechanika", inne: "Inne" };
 
 export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId: string }) {
   const wlasciciel = widziKwoty(rola);
   const [d, ustawD] = useState<Dane | null>(null);
-  const [operacje, ustawOperacje] = useState<Operacja[]>([]);
   const [pracownicy, ustawPracownikow] = useState<Pracownik[]>([]);
   const [przypisani, ustawPrzypisanych] = useState<Przypisanie[]>([]);
   const [kosztorysy, ustawKosztorysy] = useState<Kosztorys[]>([]);
@@ -42,16 +39,14 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
   const [nowyPracownik, ustawNowegoPracownika] = useState({ id: "", rola: "blacharz" });
 
   const wczytaj = useCallback(async () => {
-    const [z, o, p, zp, wz] = await Promise.all([
-      db.from("zlecenia").select("numer, rodzaj, numer_rodzaju, nr_rej, vin, marka, model, nr_szkody, zakres_prac, status, klient_id, data_przyjecia, data_wydania, termin, zastepcze_potrzebne").eq("id", zlecenieId).single(),
-      db.from("zlecenia_operacje").select("id, kolejnosc, rodzaj, opis").eq("zlecenie_id", zlecenieId).order("kolejnosc"),
+    const [z, p, zp, wz] = await Promise.all([
+      db.from("zlecenia").select("numer, rodzaj, numer_rodzaju, nr_rej, vin, marka, model, nr_szkody, zakres_prac, status, klient_id, data_przyjecia, data_wydania, termin, zastepcze_potrzebne, kod_lakieru").eq("id", zlecenieId).single(),
       db.from("pracownicy").select("id, imie, specjalizacja, aktywny").order("imie"),
       db.from("zlecenia_pracownicy").select("pracownik_id, rola").eq("zlecenie_id", zlecenieId),
       db.from("wypozyczenia").select("id, numer, wydanie, planowany_zwrot, zwrot, najemca_nazwa, auta_zastepcze(nr_rej, marka, model)").eq("zlecenie_id", zlecenieId).order("wydanie"),
     ]);
     ustawZastepcze((wz.data ?? []) as unknown as WypZl[]);
     ustawD(z.data as Dane);
-    ustawOperacje((o.data ?? []) as Operacja[]);
     ustawPracownikow((p.data ?? []) as Pracownik[]);
     ustawPrzypisanych((zp.data ?? []) as Przypisanie[]);
     if (!wlasciciel) return;
@@ -92,21 +87,12 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
       model: n(d!.model), nr_szkody: n(d!.nr_szkody), zakres_prac: n(d!.zakres_prac), status: d!.status,
       klient_id: d!.klient_id || null, data_przyjecia: d!.data_przyjecia, rodzaj: d!.rodzaj,
       termin: d!.termin ? new Date(d!.termin).toISOString() : null, zastepcze_potrzebne: d!.zastepcze_potrzebne,
+      kod_lakieru: n(d!.kod_lakieru)?.toUpperCase() ?? null,
       data_wydania: d!.data_wydania || (d!.status === "wydane" ? new Date().toISOString().slice(0, 10) : null),
     }).eq("id", zlecenieId), "Zapisano dane zlecenia.");
   }
 
-  async function zapiszOperacje() {
-    const zapis = operacje.map((o, i) => ({ ...o, kolejnosc: i + 1, opis: o.opis.trim() })).filter((o) => o.opis);
-    const istniejace = zapis.filter((o) => o.id);
-    const nowe = zapis.filter((o) => !o.id).map(({ id: _, ...o }) => ({ ...o, zlecenie_id: zlecenieId }));
-    const zachowane = new Set(istniejace.map((o) => o.id));
-    const { data: wszystkie } = await db.from("zlecenia_operacje").select("id").eq("zlecenie_id", zlecenieId);
-    const doUsuniecia = (wszystkie ?? []).map((o) => o.id as string).filter((id) => !zachowane.has(id));
-    if (doUsuniecia.length) await db.from("zlecenia_operacje").delete().in("id", doUsuniecia);
-    for (const o of istniejace) await db.from("zlecenia_operacje").update({ kolejnosc: o.kolejnosc, rodzaj: o.rodzaj, opis: o.opis }).eq("id", o.id!);
-    await wykonaj(nowe.length ? db.from("zlecenia_operacje").insert(nowe) : Promise.resolve({ error: null }), "Zapisano czynności.");
-  }
+
 
   async function otworzPdf(plik: string) {
     const { data, error } = await db.storage.from("kosztorysy").createSignedUrl(plik, 120);
@@ -162,7 +148,7 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
         <div className="srodek" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="siatka">
             {pole("nr_rej", "Rejestracja")}{pole("vin", "VIN")}{pole("marka", "Marka")}{pole("model", "Model")}
-            {pole("nr_szkody", "Nr szkody")}
+            {pole("nr_szkody", "Nr szkody")}{pole("kod_lakieru", "Numer lakieru")}
             <WyborKlienta wartosc={d.klient_id ?? ""} onChange={(id, seg) => ustawD({ ...d, klient_id: id, rodzaj: seg && RODZAJ_Z_SEGMENTU[seg] ? RODZAJ_Z_SEGMENTU[seg] : d.rodzaj })} />
             <label>Rodzaj zlecenia<select value={d.rodzaj} onChange={(e) => ustawD({ ...d, rodzaj: e.target.value })}>
               {Object.entries(RODZAJE_ZLECEN).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -200,25 +186,6 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
               <button className="przycisk drugi" onClick={() => przejdz({ ekran: "wypozyczenie", wypozyczenieId: w.id })}>Otwórz</button>
               <button className="przycisk drugi" onClick={() => przejdz({ ekran: "umowa", wypozyczenieId: w.id })}>Umowa</button>
             </div>)}
-        </div>
-      </section>
-
-      <section className="karta">
-        <div className="tytul"><h2>Czynności na karcie pracy</h2>
-          <button className="przycisk drugi" onClick={() => ustawOperacje([...operacje, { kolejnosc: operacje.length + 1, rodzaj: "blacharka", opis: "" }])}>+ Dodaj czynność</button></div>
-        <div className="srodek" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {operacje.length === 0 && <div className="cichy">Brak czynności.</div>}
-          {operacje.map((o, i) => (
-            <div key={o.id ?? `n${i}`} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <select aria-label="Rodzaj" value={o.rodzaj} onChange={(e) => ustawOperacje(operacje.map((x, j) => (j === i ? { ...x, rodzaj: e.target.value } : x)))}>
-                {Object.entries(RODZAJE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-              <input aria-label="Opis czynności" style={{ flex: "1 1 300px" }} value={o.opis}
-                onChange={(e) => ustawOperacje(operacje.map((x, j) => (j === i ? { ...x, opis: e.target.value } : x)))} />
-              <button className="przycisk drugi" aria-label="Usuń czynność" onClick={() => ustawOperacje(operacje.filter((_, j) => j !== i))}>Usuń</button>
-            </div>
-          ))}
-          <div className="przyciski"><button className="przycisk" onClick={zapiszOperacje}>Zapisz czynności</button></div>
         </div>
       </section>
 

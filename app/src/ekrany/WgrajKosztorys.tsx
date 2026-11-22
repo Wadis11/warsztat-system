@@ -7,6 +7,8 @@ import type { Kontekst } from "../App.tsx";
 import { db, normRej, zl } from "../supabase.ts";
 import { type Kosztorys, parsujKosztorys } from "../kosztorys/parser.ts";
 import { type DokumentPdf, wyciagnijTekst } from "../kosztorys/tekstPdf.ts";
+import { type CzynnoscElementu, elementyZKosztorysu } from "../kosztorys/elementy.ts";
+import { CZYNNOSCI, NAZWY_ELEMENTOW } from "./SchematAuta.tsx";
 import { WyborKlienta } from "./WyborKlienta.tsx";
 
 pdfjs.GlobalWorkerOptions.workerSrc = robotnikPdf;
@@ -80,6 +82,7 @@ export function WgrajKosztorys({ przejdz }: Kontekst) {
   const [doZlecenia, ustawDoZlecenia] = useState<string>("__nowe");
   const [blad, ustawBlad] = useState<string | null>(null);
   const [trwa, ustawTrwa] = useState<string | null>(null);
+  const [elementy, ustawElementy] = useState<Map<string, Set<CzynnoscElementu>>>(new Map());
 
   async function wczytajPlik(p: File) {
     ustawBlad(null); ustawPlik(p); ustawOdczyt(null); ustawF(null);
@@ -89,6 +92,7 @@ export function WgrajKosztorys({ przejdz }: Kontekst) {
       const tekst = await wyciagnijTekst(pdf as unknown as DokumentPdf);
       const k = parsujKosztorys(tekst.linieMono, tekst.pelnyTekst);
       const { f: nowy, wersja: w, segment: s } = zFormatu(k);
+      ustawElementy(k.format === "audatex" ? elementyZKosztorysu(tekst.linieMono, k.pozycjeCzesci) : new Map());
       ustawOdczyt(k); ustawF(nowy); ustawWersje(w); ustawSegment(s); ustawKlienta("");
 
       // Otwarte zlecenia tego auta: VIN albo rejestracja
@@ -160,13 +164,17 @@ export function WgrajKosztorys({ przejdz }: Kontekst) {
         if (error) throw error;
       }
 
-      // Karta pracy: tylko przy pierwszym kosztorysie zlecenia, żeby nie dublować czynności
-      const { count } = await db.from("zlecenia_operacje").select("id", { count: "exact", head: true }).eq("zlecenie_id", zlecenieId);
-      if (!count) {
-        const operacje = czesci.map((c, i) => ({ zlecenie_id: zlecenieId, kolejnosc: i + 1, rodzaj: "blacharka", opis: `Wymiana: ${c.nazwa}` }));
-        if ((num(f.rbh_lak) ?? 0) > 0 || (num(f.robocizna_lak) ?? 0) > 0)
-          operacje.push({ zlecenie_id: zlecenieId, kolejnosc: operacje.length + 1, rodzaj: "lakier", opis: "Lakierowanie według kosztorysu" });
-        if (operacje.length) await db.from("zlecenia_operacje").insert(operacje);
+      // Rysunek auta: elementy z kosztorysu dopisujemy do tego, co już zaznaczone
+      if (elementy.size) {
+        const { data: obecne } = await db.from("zlecenia_elementy").select("element, czynnosci").eq("zlecenie_id", zlecenieId);
+        const mapa = new Map((obecne ?? []).map((r: { element: string; czynnosci: string[] }) => [r.element, new Set(r.czynnosci)]));
+        const zapis = [...elementy].map(([element, cz]) => {
+          const razem = new Set([...(mapa.get(element) ?? []), ...cz]);
+          if (razem.has("lakierowanie")) razem.delete("cieniowanie");
+          return { zlecenie_id: zlecenieId, element, czynnosci: [...razem], zmieniono: new Date().toISOString() };
+        });
+        const { error } = await db.from("zlecenia_elementy").upsert(zapis);
+        if (error) throw error;
       }
       przejdz({ ekran: "karta", zlecenieId });
     } catch (e) {
@@ -241,6 +249,13 @@ export function WgrajKosztorys({ przejdz }: Kontekst) {
             </details>
           )}
 
+          {elementy.size > 0 && <div>
+            <h2>Na rysunku auta zaznaczę</h2>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+              {[...elementy].map(([el, cz]) => <li key={el}>{NAZWY_ELEMENTOW[el] ?? el}: {[...cz].map((c) => CZYNNOSCI[c].nazwa.toLowerCase()).join(", ")}</li>)}
+            </ul>
+            <p className="cichy" style={{ margin: "6px 0 0" }}>Odczytane z sekcji robocizny i lakierowania. Poprawisz to w zleceniu na rysunku.</p>
+          </div>}
           <div className="przyciski"><button className="przycisk" disabled={!!trwa} onClick={zapisz}>Zapisz kosztorys i pokaż kartę pracy</button></div>
         </div></section>
       )}
