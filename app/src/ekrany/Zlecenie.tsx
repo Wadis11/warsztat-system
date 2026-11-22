@@ -4,6 +4,7 @@ import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db, zl } from "../supabase.ts";
 import { RODZAJE as RODZAJE_ZLECEN, RODZAJ_Z_SEGMENTU, WyborKlienta } from "./WyborKlienta.tsx";
 import { ROLE, type Pracownik } from "./Pracownicy.tsx";
+import { SchematAuta } from "./SchematAuta.tsx";
 
 interface Dane {
   numer: string; rodzaj: string; numer_rodzaju: string; nr_rej: string | null; vin: string | null; marka: string | null; model: string | null;
@@ -180,6 +181,12 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
             <textarea value={d.zakres_prac ?? ""} onChange={(e) => ustawD({ ...d, zakres_prac: e.target.value })} /></label>
           <div className="przyciski"><button className="przycisk" onClick={zapiszDane}>Zapisz dane</button></div>
         </div>
+      </section>
+
+      <section className="karta">
+        <div className="tytul"><h2>Zakres prac na rysunku</h2>
+          <button className="przycisk drugi" onClick={() => przejdz({ ekran: "karta", zlecenieId })}>Karta pracy</button></div>
+        <div className="srodek"><SchematAuta zlecenieId={zlecenieId} /></div>
       </section>
 
       <section className="karta">

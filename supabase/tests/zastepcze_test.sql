@@ -44,3 +44,15 @@ select pg_temp.sprawdz((select count(*) from wypozyczenia) = 2, 'pracownik nie u
 insert into zlecenia (nr_rej, status, termin, zastepcze_potrzebne, data_przyjecia) values ('KR 777AA', 'umowione', '2026-11-25 08:00+01', true, '2026-11-25');
 select pg_temp.sprawdz((select count(*) from zlecenia where status = 'umowione' and zastepcze_potrzebne) = 1, 'zlecenie umówione z potrzebą auta zastępczego');
 reset role;
+
+-- Elementy na rysunku auta
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+insert into zlecenia_elementy (zlecenie_id, element, czynnosci) select id, 'maska', array['blacharka', 'lakierowanie'] from zlecenia where nr_rej = 'KR 777AA';
+select pg_temp.sprawdz((select czynnosci from zlecenia_elementy where element = 'maska') = array['blacharka', 'lakierowanie'], 'pracownik zaznacza element na rysunku');
+do $$ begin
+  insert into zlecenia_elementy (zlecenie_id, element, czynnosci) select id, 'dach', array['malowanie'] from zlecenia where nr_rej = 'KR 777AA';
+  raise exception 'NIE PRZESZŁO: nieznana czynność przyjęta';
+exception when check_violation then raise notice 'ok: tylko znane czynności';
+end $$;
+reset role;
