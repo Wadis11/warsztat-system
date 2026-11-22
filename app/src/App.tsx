@@ -12,10 +12,17 @@ import { Pracownicy } from "./ekrany/Pracownicy.tsx";
 import { Platnosci } from "./ekrany/Platnosci.tsx";
 import { Material } from "./ekrany/Material.tsx";
 import { Lakiery } from "./ekrany/Lakiery.tsx";
+import { Pulpit } from "./ekrany/Pulpit.tsx";
+import { Zastepcze, AutoZastepcze, NoweWypozyczenie, Umowa } from "./ekrany/Zastepcze.tsx";
 
 export type Rola = "wlasciciel" | "pracownik";
 export type Widok =
+  | { ekran: "pulpit" }
   | { ekran: "kolejka" }
+  | { ekran: "zastepcze" }
+  | { ekran: "auto_zastepcze"; autoId: string }
+  | { ekran: "wypozyczenie"; autoId?: string; zlecenieId?: string; od?: string; wypozyczenieId?: string }
+  | { ekran: "umowa"; wypozyczenieId: string }
   | { ekran: "zlecenia" }
   | { ekran: "nowe" }
   | { ekran: "kosztorys" }
@@ -35,7 +42,7 @@ export function App() {
   const [sesja, ustawSesje] = useState<Session | null | undefined>(undefined);
   const [poziom, ustawPoziom] = useState<{ obecny: string; wymagany: string } | null>(null);
   const [rola, ustawRole] = useState<Rola | null | undefined>(undefined);
-  const [widok, ustawWidok] = useState<Widok>({ ekran: "zlecenia" });
+  const [widok, ustawWidok] = useState<Widok>({ ekran: "pulpit" });
   const [wKolejce, ustawWKolejce] = useState<number | null>(null);
   const [wTerminie, ustawWTerminie] = useState<number | null>(null);
 
@@ -56,8 +63,6 @@ export function App() {
     db.rpc("moja_rola").then(({ data }) => ustawRole((data as Rola | null) ?? null));
   }, [sesja, odswiezPoziom]);
 
-  // Właściciel zaczyna dzień od kolejki
-  useEffect(() => { if (rola === "wlasciciel") ustawWidok({ ekran: "kolejka" }); }, [rola]);
 
   const odswiezLicznik = useCallback(async () => {
     if (rola !== "wlasciciel" || poziom?.obecny !== "aal2") return;
@@ -87,8 +92,10 @@ export function App() {
   }
 
   const k: Kontekst = { rola, przejdz: ustawWidok };
+  const GRUPY: Partial<Record<Widok["ekran"], Widok["ekran"]>> = { kolejka: "platnosci", auto_zastepcze: "zastepcze", wypozyczenie: "zastepcze", umowa: "zastepcze", zlecenie: "zlecenia", karta: "zlecenia", kosztorys: "nowe" };
+  const aktywny = GRUPY[widok.ekran] ?? widok.ekran;
   const pozycja = (w: Widok["ekran"], etykieta: string, licznik?: number | null) => (
-    <button aria-current={widok.ekran === w ? "page" : undefined} onClick={() => ustawWidok({ ekran: w } as Widok)}>
+    <button aria-current={aktywny === w ? "page" : undefined} onClick={() => ustawWidok({ ekran: w } as Widok)}>
       {etykieta}{licznik ? <span className="licznik">{licznik}</span> : null}
     </button>
   );
@@ -97,10 +104,11 @@ export function App() {
     <div className="uklad">
       <nav className="menu" aria-label="Menu główne">
         <div className="marka">Warsztat · Rentowność</div>
-        {rola === "wlasciciel" && pozycja("kolejka", "Do sprawdzenia", wKolejce)}
+        {pozycja("pulpit", "Pulpit")}
         {pozycja("zlecenia", "Zlecenia")}
         {pozycja("nowe", "Nowe zlecenie")}
-        {rola === "wlasciciel" && pozycja("platnosci", "Płatności", wTerminie)}
+        {pozycja("zastepcze", "Auta zastępcze")}
+        {rola === "wlasciciel" && pozycja("platnosci", "Płatności", (wTerminie ?? 0) + (wKolejce ?? 0))}
         {rola === "wlasciciel" && pozycja("material", "Materiał")}
         {rola === "wlasciciel" && pozycja("lakiery", "Lakiery")}
         {rola === "wlasciciel" && pozycja("pracownicy", "Pracownicy")}
@@ -110,7 +118,17 @@ export function App() {
         </div>
       </nav>
       <main className="tresc">
+        {widok.ekran === "pulpit" && <Pulpit {...k} />}
+        {(widok.ekran === "platnosci" || widok.ekran === "kolejka") && (
+          <div className="przyciski" style={{ marginBottom: 16 }}>
+            <button className={`przycisk ${widok.ekran === "platnosci" ? "" : "drugi"}`} onClick={() => ustawWidok({ ekran: "platnosci" })}>Do zapłaty{wTerminie ? ` (${wTerminie})` : ""}</button>
+            <button className={`przycisk ${widok.ekran === "kolejka" ? "" : "drugi"}`} onClick={() => ustawWidok({ ekran: "kolejka" })}>Do sprawdzenia{wKolejce ? ` (${wKolejce})` : ""}</button>
+          </div>)}
         {widok.ekran === "kolejka" && <Kolejka {...k} poZmianie={odswiezLicznik} />}
+        {widok.ekran === "zastepcze" && <Zastepcze {...k} />}
+        {widok.ekran === "auto_zastepcze" && <AutoZastepcze key={widok.autoId} {...k} autoId={widok.autoId} />}
+        {widok.ekran === "wypozyczenie" && <NoweWypozyczenie {...k} {...widok} />}
+        {widok.ekran === "umowa" && <Umowa {...k} wypozyczenieId={widok.wypozyczenieId} />}
         {widok.ekran === "zlecenia" && <Zlecenia {...k} />}
         {widok.ekran === "nowe" && <NoweZlecenie {...k} />}
         {widok.ekran === "kosztorys" && <NoweZlecenie {...k} tryb="kosztorys" />}

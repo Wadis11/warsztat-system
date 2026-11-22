@@ -8,8 +8,9 @@ import { ROLE, type Pracownik } from "./Pracownicy.tsx";
 interface Dane {
   numer: string; nr_rej: string | null; vin: string | null; marka: string | null; model: string | null;
   nr_szkody: string | null; zakres_prac: string | null; status: string; klient_id: string | null;
-  data_przyjecia: string; data_wydania: string | null;
+  data_przyjecia: string; data_wydania: string | null; termin: string | null; zastepcze_potrzebne: boolean;
 }
+interface WypZl { id: string; numer: string; wydanie: string; planowany_zwrot: string | null; zwrot: string | null; najemca_nazwa: string; auta_zastepcze: { nr_rej: string; marka: string | null; model: string | null } | null }
 interface Operacja { id?: string; kolejnosc: number; rodzaj: string; opis: string }
 interface Przypisanie { pracownik_id: string; rola: string }
 interface Kosztorys { id: string; wersja: string; zrodlo: string; autor: string | null; data: string | null; netto: number;
@@ -19,7 +20,7 @@ interface PozycjaKosztu { id: string; nazwa: string; indeks: string | null; wart
 interface FakturaSprzedazy { id: string; numer: string; nazwa_kontrahenta: string | null; data_wystawienia: string; netto: number; zlecenie_id: string | null }
 interface Wynik { przychod_kosztorys: number | null; przychod_faktura: number | null; koszt_czesci: number; koszt_lakier_materialy: number; rbh: number }
 
-const STATUSY: Record<string, string> = { przyjete: "Przyjęte", w_naprawie: "W naprawie", gotowe: "Gotowe", wydane: "Wydane", anulowane: "Anulowane" };
+const STATUSY: Record<string, string> = { umowione: "Umówione", przyjete: "Przyjęte", w_naprawie: "W naprawie", gotowe: "Gotowe", wydane: "Wydane", anulowane: "Anulowane" };
 const WERSJE: Record<string, string> = { zlozony: "Złożony", zaakceptowany: "Zaakceptowany", wycena_ubezpieczyciela: "Wycena ubezpieczyciela" };
 const KATEGORIE: Record<string, string> = { czesc: "Część", lakier: "Lakier", material: "Materiał", koszt_ogolny: "Koszt ogólny", koszt_sprawy: "Koszt sprawy", nieustalona: "Nieustalona" };
 const RODZAJE: Record<string, string> = { blacharka: "Blacharka", lakier: "Lakier", mechanika: "Mechanika", inne: "Inne" };
@@ -36,15 +37,18 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
   const [wolneSprzedaz, ustawWolneSprzedaz] = useState<FakturaSprzedazy[]>([]);
   const [wynik, ustawWynik] = useState<Wynik | null>(null);
   const [komunikat, ustawKomunikat] = useState<{ blad: boolean; tekst: string } | null>(null);
+  const [zastepcze, ustawZastepcze] = useState<WypZl[]>([]);
   const [nowyPracownik, ustawNowegoPracownika] = useState({ id: "", rola: "blacharz" });
 
   const wczytaj = useCallback(async () => {
-    const [z, o, p, zp] = await Promise.all([
-      db.from("zlecenia").select("numer, nr_rej, vin, marka, model, nr_szkody, zakres_prac, status, klient_id, data_przyjecia, data_wydania").eq("id", zlecenieId).single(),
+    const [z, o, p, zp, wz] = await Promise.all([
+      db.from("zlecenia").select("numer, nr_rej, vin, marka, model, nr_szkody, zakres_prac, status, klient_id, data_przyjecia, data_wydania, termin, zastepcze_potrzebne").eq("id", zlecenieId).single(),
       db.from("zlecenia_operacje").select("id, kolejnosc, rodzaj, opis").eq("zlecenie_id", zlecenieId).order("kolejnosc"),
       db.from("pracownicy").select("id, imie, specjalizacja, aktywny").order("imie"),
       db.from("zlecenia_pracownicy").select("pracownik_id, rola").eq("zlecenie_id", zlecenieId),
+      db.from("wypozyczenia").select("id, numer, wydanie, planowany_zwrot, zwrot, najemca_nazwa, auta_zastepcze(nr_rej, marka, model)").eq("zlecenie_id", zlecenieId).order("wydanie"),
     ]);
+    ustawZastepcze((wz.data ?? []) as unknown as WypZl[]);
     ustawD(z.data as Dane);
     ustawOperacje((o.data ?? []) as Operacja[]);
     ustawPracownikow((p.data ?? []) as Pracownik[]);
@@ -75,7 +79,7 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
 
   if (!d) return null;
   const pole = (k: keyof Dane, etykieta: string, typ = "text") => (
-    <label>{etykieta}<input type={typ} value={d[k] ?? ""} onChange={(e) => ustawD({ ...d, [k]: e.target.value })} /></label>
+    <label>{etykieta}<input type={typ} value={String(d[k] ?? "")} onChange={(e) => ustawD({ ...d, [k]: e.target.value })} /></label>
   );
 
   function zapiszDane() {
@@ -84,6 +88,7 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
       nr_rej: n(d!.nr_rej)?.toUpperCase() ?? null, vin: n(d!.vin)?.toUpperCase() ?? null, marka: n(d!.marka)?.toUpperCase() ?? null,
       model: n(d!.model), nr_szkody: n(d!.nr_szkody), zakres_prac: n(d!.zakres_prac), status: d!.status,
       klient_id: d!.klient_id || null, data_przyjecia: d!.data_przyjecia,
+      termin: d!.termin ? new Date(d!.termin).toISOString() : null, zastepcze_potrzebne: d!.zastepcze_potrzebne,
       data_wydania: d!.data_wydania || (d!.status === "wydane" ? new Date().toISOString().slice(0, 10) : null),
     }).eq("id", zlecenieId), "Zapisano dane zlecenia.");
   }
@@ -162,10 +167,28 @@ export function Zlecenie({ rola, przejdz, zlecenieId }: Kontekst & { zlecenieId:
               </select>
             </label>
             {pole("data_przyjecia", "Data przyjęcia", "date")}{pole("data_wydania", "Data wydania", "date")}
+            <label>Umówiony termin<input type="datetime-local" value={d.termin ? new Date(new Date(d.termin).getTime() - new Date(d.termin).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : ""}
+              onChange={(e) => ustawD({ ...d, termin: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
+            <label style={{ flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "end" }}>
+              <input type="checkbox" style={{ minHeight: 0 }} checked={d.zastepcze_potrzebne} onChange={(e) => ustawD({ ...d, zastepcze_potrzebne: e.target.checked })} /> potrzebne auto zastępcze</label>
           </div>
           <label>Zakres prac (opis ogólny)
             <textarea value={d.zakres_prac ?? ""} onChange={(e) => ustawD({ ...d, zakres_prac: e.target.value })} /></label>
           <div className="przyciski"><button className="przycisk" onClick={zapiszDane}>Zapisz dane</button></div>
+        </div>
+      </section>
+
+      <section className="karta">
+        <div className="tytul"><h2>Auto zastępcze</h2>
+          <button className="przycisk drugi" onClick={() => przejdz({ ekran: "wypozyczenie", zlecenieId })}>Wydaj auto zastępcze</button></div>
+        <div className="srodek" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {zastepcze.length === 0 ? <div className="cichy">{d.zastepcze_potrzebne ? "Klient potrzebuje auta zastępczego — jeszcze nie wydano." : "Bez auta zastępczego."}</div> :
+            zastepcze.map((w) => <div key={w.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <strong>{w.auta_zastepcze?.nr_rej}</strong><span>{[w.auta_zastepcze?.marka, w.auta_zastepcze?.model].filter(Boolean).join(" ")}</span>
+              <span className="cichy">{w.numer} · {w.najemca_nazwa} · {new Date(w.wydanie).toLocaleDateString("pl-PL")} – {w.zwrot ? new Date(w.zwrot).toLocaleDateString("pl-PL") : w.planowany_zwrot ? `${new Date(w.planowany_zwrot).toLocaleDateString("pl-PL")} (plan)` : "…"}</span>
+              <button className="przycisk drugi" onClick={() => przejdz({ ekran: "wypozyczenie", wypozyczenieId: w.id })}>Otwórz</button>
+              <button className="przycisk drugi" onClick={() => przejdz({ ekran: "umowa", wypozyczenieId: w.id })}>Umowa</button>
+            </div>)}
         </div>
       </section>
 

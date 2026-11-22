@@ -10,7 +10,7 @@ interface Wiersz {
   przychod_kosztorys?: number | null; przychod_faktura?: number | null; rbh?: number | null;
   koszt_czesci?: number | null; koszt_lakier_materialy?: number | null; pozycji_kosztowych?: number | null;
 }
-const STATUSY: Record<string, string> = { przyjete: "Przyjęte", w_naprawie: "W naprawie", gotowe: "Gotowe", wydane: "Wydane", anulowane: "Anulowane" };
+const STATUSY: Record<string, string> = { umowione: "Umówione", przyjete: "Przyjęte", w_naprawie: "W naprawie", gotowe: "Gotowe", wydane: "Wydane", anulowane: "Anulowane" };
 
 export function Zlecenia({ rola, przejdz }: Kontekst) {
   const [wiersze, ustawWiersze] = useState<Wiersz[] | null>(null);
@@ -39,12 +39,13 @@ export function Zlecenia({ rola, przejdz }: Kontekst) {
   async function zmienStatus(id: string, status: string) {
     const zmiana: Record<string, string | null> = { status };
     if (status === "wydane") zmiana.data_wydania = new Date().toISOString().slice(0, 10);
+    if (status === "przyjete") zmiana.data_przyjecia = new Date().toLocaleDateString("sv-SE");
     await db.from("zlecenia").update(zmiana).eq("id", id);
     await wczytaj();
   }
 
   const q = szukaj.toUpperCase().replace(/\s/g, "");
-  const OTWARTE = ["przyjete", "w_naprawie", "gotowe"];
+  const OTWARTE = ["umowione", "przyjete", "w_naprawie", "gotowe"];
   const widoczne = (wiersze ?? []).filter((w) =>
     (!filtr.status || (filtr.status === "otwarte" ? OTWARTE.includes(w.status) : w.status === filtr.status)) &&
     (!filtr.segment || w.segment === filtr.segment) && (!filtr.klient || w.klient_id === filtr.klient)).filter((w) => !q || `${w.numer}${w.nr_rej}${w.marka}${w.model}${w.klient ?? ""}`.toUpperCase().replace(/\s/g, "").includes(q));

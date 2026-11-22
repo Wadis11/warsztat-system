@@ -26,6 +26,8 @@ export function NoweZlecenie(k: Kontekst & { tryb?: "kosztorys" | "reczne" }) {
 function FormularzReczny({ przejdz }: Kontekst) {
   const [f, ustawF] = useState({ nr_rej: "", vin: "", marka: "", model: "", nr_szkody: "", zakres_prac: "" });
   const [klient, ustawKlienta] = useState("");
+  const [termin, ustawTermin] = useState("");
+  const [zastepcze, ustawZastepcze] = useState(false);
   const [blad, ustawBlad] = useState<string | null>(null);
   const [trwa, ustawTrwa] = useState(false);
   const pole = (k: keyof typeof f) => ({ value: f[k], onChange: (e: { target: { value: string } }) => ustawF({ ...f, [k]: e.target.value }) });
@@ -42,10 +44,15 @@ function FormularzReczny({ przejdz }: Kontekst) {
       nr_szkody: f.nr_szkody.trim() || null,
       zakres_prac: f.zakres_prac.trim() || null,
       klient_id: klient || null,
+      termin: termin ? new Date(termin).toISOString() : null,
+      zastepcze_potrzebne: zastepcze,
+      // Auto umówione na przyszły dzień czeka w kalendarzu; w dniu przyjęcia zmień status na „Przyjęte”
+      ...(termin && new Date(termin).toLocaleDateString("sv-SE") > new Date().toLocaleDateString("sv-SE")
+        ? { status: "umowione", data_przyjecia: new Date(termin).toLocaleDateString("sv-SE") } : {}),
     }).select("id").single();
     ustawTrwa(false);
     if (error) { ustawBlad(`Nie zapisano: ${error.message}`); return; }
-    przejdz({ ekran: "karta", zlecenieId: data.id });
+    przejdz(termin && new Date(termin) > new Date() ? { ekran: "pulpit" } : { ekran: "karta", zlecenieId: data.id });
   }
 
   return (
@@ -58,6 +65,9 @@ function FormularzReczny({ przejdz }: Kontekst) {
           <label>Model<input {...pole("model")} /></label>
           <label>Nr szkody (jeśli jest)<input {...pole("nr_szkody")} /></label>
           <WyborKlienta wartosc={klient} onChange={ustawKlienta} podpowiedzSegmentu="prywatny" />
+          <label>Termin przyjęcia (jeśli umawiasz)<input type="datetime-local" value={termin} onChange={(e) => ustawTermin(e.target.value)} /></label>
+          <label style={{ flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "end" }}>
+            <input type="checkbox" style={{ minHeight: 0 }} checked={zastepcze} onChange={(e) => ustawZastepcze(e.target.checked)} /> potrzebne auto zastępcze</label>
         </div>
         <label>Zakres prac dla pracownika
           <textarea {...pole("zakres_prac")} placeholder={"Jedna czynność w wierszu, np.\nZderzak przedni: naprawa i lakierowanie\nLusterko lewe: wymiana obudowy"} />
