@@ -4,11 +4,12 @@ import { type Kontekst, widziKwoty } from "../App.tsx";
 import { db } from "../supabase.ts";
 import { RODZAJE, RODZAJ_Z_SEGMENTU, WyborKlienta } from "./WyborKlienta.tsx";
 import { WgrajKosztorys } from "./WgrajKosztorys.tsx";
+import { AudaNet } from "./AudaNet.tsx";
 
 /** Nowe zlecenie: z kosztorysu PDF (właściciel) albo ręcznie. */
-export function NoweZlecenie(k: Kontekst & { tryb?: "kosztorys" | "reczne" }) {
+export function NoweZlecenie(k: Kontekst & { tryb?: "kosztorys" | "reczne" | "audanet" }) {
   const wlasciciel = widziKwoty(k.rola);
-  const [tryb, ustawTryb] = useState<"kosztorys" | "reczne">(wlasciciel ? k.tryb ?? "kosztorys" : "reczne");
+  const [tryb, ustawTryb] = useState<"kosztorys" | "reczne" | "audanet">(wlasciciel ? k.tryb ?? "kosztorys" : "reczne");
   return (
     <div className="kolumna">
       <div className="naglowek"><div><h1>Nowe zlecenie</h1>
@@ -16,9 +17,10 @@ export function NoweZlecenie(k: Kontekst & { tryb?: "kosztorys" | "reczne" }) {
         {wlasciciel && <div className="przyciski">
           <button className={`przycisk ${tryb === "kosztorys" ? "" : "drugi"}`} onClick={() => ustawTryb("kosztorys")}>Z kosztorysu (PDF)</button>
           <button className={`przycisk ${tryb === "reczne" ? "" : "drugi"}`} onClick={() => ustawTryb("reczne")}>Ręcznie</button>
+          <button className={`przycisk ${tryb === "audanet" ? "" : "drugi"}`} onClick={() => ustawTryb("audanet")}>Z listy AudaNet</button>
         </div>}
       </div>
-      {tryb === "kosztorys" ? <WgrajKosztorys {...k} /> : <FormularzReczny {...k} />}
+      {tryb === "kosztorys" ? <WgrajKosztorys {...k} /> : tryb === "audanet" ? <AudaNet {...k} /> : <FormularzReczny {...k} />}
     </div>
   );
 }
