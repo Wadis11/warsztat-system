@@ -106,3 +106,10 @@ select pg_temp.faktura('P-ADRES', '<Faktura xmlns="http://crd.gov.pl/wzor/2025/0
 <Fa><Platnosc><TerminPlatnosci><Termin>2026-12-01</Termin></TerminPlatnosci></Platnosc></Fa></Faktura>', 100);
 select pg_temp.sprawdz((select adres_kontrahenta from platnosci where nr_ksef = 'P-ADRES') = 'UL. DŁUGA 5|30-001 Kraków',
                        'adres sprzedawcy z faktury zakupu');
+
+-- Numer rachunku bez prefiksów
+select pg_temp.sprawdz(normalizuj_rachunek('PL02105015331000009811974360') = '02105015331000009811974360', 'rachunek z PL');
+select pg_temp.sprawdz(normalizuj_rachunek('ING:05105014451000009237907184') = '05105014451000009237907184', 'rachunek z ING:');
+select pg_temp.sprawdz(normalizuj_rachunek('11 1090 1665 0000 0001 3222 7458') = '11109016650000000132227458', 'rachunek ze spacjami');
+select pg_temp.sprawdz(normalizuj_rachunek('numerrachunku') is null, 'śmieci zamiast rachunku = brak');
+select pg_temp.sprawdz(normalizuj_rachunek('DE89370400440532013000') = 'DE89370400440532013000', 'zagraniczny IBAN bez zmian');

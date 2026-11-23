@@ -6,7 +6,7 @@ import { plikPli, type Przelew, walidacja, type Zleceniodawca } from "../przelew
 
 interface Platnosc {
   id: string; numer: string; nip_kontrahenta: string | null; nazwa_kontrahenta: string | null; data_wystawienia: string;
-  rodzaj: string | null; vat: number; brutto: number; do_zaplaty: number | null; waluta: string; termin_platnosci: string | null;
+  rodzaj: string | null; netto: number; vat: number; brutto: number; do_zaplaty: number | null; waluta: string; termin_platnosci: string | null;
   forma_platnosci: number | null; rachunek: string | null; bank: string | null; rachunek_wirtualny: boolean; mpp: boolean;
   oplacono: string | null; bl_wynik: string | null; bl_sprawdzono: string | null; bl_id: string | null;
   status: string; dni_do_terminu: number | null; adres_kontrahenta: string | null;
@@ -255,8 +255,9 @@ export function Platnosci(_: Kontekst) {
             </div>
           )}
           {lista && widoczne.length === 0 ? <div className="pusto">{lista.length === 0 ? "Nic do zapłaty." : "Brak faktur dla tego filtra."}</div> : (
-            <div className="przewijanie"><table style={{ minWidth: 900 }}>
-              <thead><tr><th></th><th>Termin</th><th>Dostawca</th><th>Faktura</th><th className="liczba">Do zapłaty</th><th>Rachunek</th><th></th></tr></thead>
+            <div className="przewijanie"><table style={{ minWidth: 1180 }}>
+              <thead><tr><th></th><th>Data wystawienia</th><th>Termin płatności</th><th>Nazwa</th><th>Nr faktury</th>
+                <th className="liczba">Netto</th><th className="liczba">VAT</th><th className="liczba">Brutto</th><th>Numer rachunku</th><th></th></tr></thead>
               <tbody>{widoczne.map((p) => {
                 const t = opisTerminu(p);
                 const otwarte = rozwiniete.has(p.id);
@@ -266,11 +267,15 @@ export function Platnosci(_: Kontekst) {
                     <tr style={zaplacona ? { opacity: 0.55 } : undefined}>
                       <td><input type="checkbox" aria-label={`Zaznacz ${p.numer}`} style={{ minHeight: 0 }} disabled={zaplacona} checked={zaznaczone.has(p.id)}
                         onChange={(e) => { const s = new Set(zaznaczone); if (e.target.checked) s.add(p.id); else s.delete(p.id); ustawZaznaczone(s); }} /></td>
+                      <td>{p.data_wystawienia}</td>
                       <td>{p.termin_platnosci ?? "—"}<div className={t.klasa} style={{ fontSize: 12 }}>{zaplacona ? `zapłacono ${p.oplacono}` : t.tekst}</div></td>
                       <td>{p.nazwa_kontrahenta}<div className="cichy">NIP {p.nip_kontrahenta ?? "—"}</div></td>
-                      <td>{p.numer}<div className="cichy">wyst. {p.data_wystawienia}{p.rodzaj?.startsWith("KOR") ? " · korekta" : ""}</div></td>
-                      <td className={`liczba ${(p.do_zaplaty ?? 0) < 0 ? "plus" : ""}`}>{zl(p.do_zaplaty ?? p.brutto)}{p.waluta !== "PLN" ? ` ${p.waluta}` : ""}
+                      <td>{p.numer}{p.rodzaj?.startsWith("KOR") && <div className="cichy">korekta</div>}
                         {p.mpp && <div><span className="znacznik" style={{ background: "var(--uwaga-tlo)", color: "var(--uwaga)" }}>MPP</span></div>}</td>
+                      <td className="liczba">{zl(p.netto)}</td>
+                      <td className="liczba">{zl(p.vat)}</td>
+                      <td className="liczba"><strong>{zl(p.brutto)}</strong>{p.waluta !== "PLN" ? ` ${p.waluta}` : ""}
+                        {p.do_zaplaty !== null && Math.abs(Number(p.do_zaplaty) - Number(p.brutto)) > 0.009 && <div className="cichy">do zapłaty {zl(p.do_zaplaty)}</div>}</td>
                       <td><span style={{ fontVariantNumeric: "tabular-nums", fontSize: 13 }}>{nrb(p.rachunek)}</span>
                         <div style={{ marginTop: 4 }}>{p.rachunek ? <BialaLista p={p} /> : <span className="znacznik">brak rachunku na fakturze</span>}</div></td>
                       <td><div className="przyciski">
@@ -280,7 +285,7 @@ export function Platnosci(_: Kontekst) {
                           : <button className="przycisk drugi" onClick={() => oznacz([p.id], true)}>Zapłacone</button>}
                       </div></td>
                     </tr>
-                    {otwarte && <tr><td></td><td colSpan={6}><DanePrzelewu p={p} /></td></tr>}
+                    {otwarte && <tr><td></td><td colSpan={9}><DanePrzelewu p={p} /></td></tr>}
                   </Fragment>
                 );
               })}</tbody>
